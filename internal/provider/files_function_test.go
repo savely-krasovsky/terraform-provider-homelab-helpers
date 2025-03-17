@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/tfversion"
 )
 
-func TestDirectoriesFunction_Known(t *testing.T) {
+func TestFilesFunction_Known(t *testing.T) {
 	resource.UnitTest(t, resource.TestCase{
 		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
 			tfversion.SkipBelow(tfversion.Version1_8_0),
@@ -22,16 +22,14 @@ func TestDirectoriesFunction_Known(t *testing.T) {
 			{
 				Config: `
 				output "test" {
-					value = provider::homelab-helpers::directories("${path.module}", true)
+					value = provider::homelab-helpers::files("${path.module}/example1", true)
 				}
 				`,
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownOutputValue(
 						"test",
 						knownvalue.ListExact([]knownvalue.Check{
-							knownvalue.StringExact("example1"),
-							knownvalue.StringExact("example1/example2"),
-							knownvalue.StringExact("example3"),
+							knownvalue.StringExact("example2/test.txt"),
 						}),
 					),
 				},

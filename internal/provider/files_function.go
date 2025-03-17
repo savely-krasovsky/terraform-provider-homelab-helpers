@@ -13,20 +13,20 @@ import (
 )
 
 var (
-	_ function.Function = DirectoriesFunction{}
+	_ function.Function = FilesFunction{}
 )
 
-func NewDirectoriesFunction() function.Function {
-	return DirectoriesFunction{}
+func NewFilesFunction() function.Function {
+	return FilesFunction{}
 }
 
-type DirectoriesFunction struct{}
+type FilesFunction struct{}
 
-func (r DirectoriesFunction) Metadata(_ context.Context, req function.MetadataRequest, resp *function.MetadataResponse) {
-	resp.Name = "directories"
+func (r FilesFunction) Metadata(_ context.Context, req function.MetadataRequest, resp *function.MetadataResponse) {
+	resp.Name = "files"
 }
 
-func (r DirectoriesFunction) Definition(_ context.Context, _ function.DefinitionRequest, resp *function.DefinitionResponse) {
+func (r FilesFunction) Definition(_ context.Context, _ function.DefinitionRequest, resp *function.DefinitionResponse) {
 	resp.Definition = function.Definition{
 		Summary: "Walks the file tree rooted at root and finds all directories",
 		Parameters: []function.Parameter{
@@ -49,7 +49,7 @@ func (r DirectoriesFunction) Definition(_ context.Context, _ function.Definition
 	}
 }
 
-func (r DirectoriesFunction) Run(ctx context.Context, req function.RunRequest, resp *function.RunResponse) {
+func (r FilesFunction) Run(ctx context.Context, req function.RunRequest, resp *function.RunResponse) {
 	var (
 		root string
 		unix bool
@@ -60,19 +60,19 @@ func (r DirectoriesFunction) Run(ctx context.Context, req function.RunRequest, r
 		return
 	}
 
-	resp.Error = function.ConcatFuncErrors(resp.Result.Set(ctx, directories(root, unix)))
+	resp.Error = function.ConcatFuncErrors(resp.Result.Set(ctx, files(root, unix)))
 }
 
-func directories(root string, unix bool) []string {
-	dirs := make([]string, 0)
+func files(root string, unix bool) []string {
+	ff := make([]string, 0)
 
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
-		return dirs
+		return ff
 	}
 
 	_ = filepath.Walk(root, func(path string, d fs.FileInfo, err error) error {
-		if err != nil || !d.IsDir() {
+		if err != nil || d.IsDir() {
 			return nil
 		}
 
@@ -93,13 +93,13 @@ func directories(root string, unix bool) []string {
 		}
 
 		if !unix {
-			dirs = append(dirs, relPath)
+			ff = append(ff, relPath)
 		} else {
-			dirs = append(dirs, filepath.ToSlash(relPath))
+			ff = append(ff, filepath.ToSlash(relPath))
 		}
 
 		return nil
 	})
 
-	return dirs
+	return ff
 }
