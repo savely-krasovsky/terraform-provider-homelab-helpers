@@ -1,0 +1,67 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
+package provider
+
+import (
+	"context"
+	"io/fs"
+	"path/filepath"
+
+	"github.com/hashicorp/terraform-plugin-framework/function"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+)
+
+var (
+	_ function.Function = DirectoriesFunction{}
+)
+
+func NewDirectoriesFunction() function.Function {
+	return DirectoriesFunction{}
+}
+
+type DirectoriesFunction struct{}
+
+func (r DirectoriesFunction) Metadata(_ context.Context, req function.MetadataRequest, resp *function.MetadataResponse) {
+	resp.Name = "directories"
+}
+
+func (r DirectoriesFunction) Definition(_ context.Context, _ function.DefinitionRequest, resp *function.DefinitionResponse) {
+	resp.Definition = function.Definition{
+		Summary: "Walks the file tree rooted at root and finds all directories",
+		Parameters: []function.Parameter{
+			function.StringParameter{
+				AllowNullValue:     false,
+				AllowUnknownValues: false,
+				Description:        "The root to walk",
+				Name:               "root",
+			},
+		},
+		Return: function.ListReturn{
+			ElementType: basetypes.StringType{},
+		},
+	}
+}
+
+func (r DirectoriesFunction) Run(ctx context.Context, req function.RunRequest, resp *function.RunResponse) {
+	var root string
+
+	resp.Error = function.ConcatFuncErrors(req.Arguments.Get(ctx, &root))
+	if resp.Error != nil {
+		return
+	}
+
+	resp.Error = function.ConcatFuncErrors(resp.Result.Set(ctx, directories(root)))
+}
+
+func directories(root string) []string {
+	dirs := make([]string, 0)
+	_ = filepath.Walk(root, func(path string, d fs.FileInfo, err error) error {
+		if err == nil && d.IsDir() && path != "." {
+			dirs = append(dirs, path)
+		}
+		return nil
+	})
+
+	return dirs
+}
