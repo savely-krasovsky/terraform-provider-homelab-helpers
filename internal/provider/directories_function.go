@@ -36,6 +36,12 @@ func (r DirectoriesFunction) Definition(_ context.Context, _ function.Definition
 				Description:        "The root to walk",
 				Name:               "root",
 			},
+			function.BoolParameter{
+				AllowNullValue:     true,
+				AllowUnknownValues: false,
+				Description:        "Use unix separators",
+				Name:               "unix",
+			},
 		},
 		Return: function.ListReturn{
 			ElementType: basetypes.StringType{},
@@ -44,21 +50,28 @@ func (r DirectoriesFunction) Definition(_ context.Context, _ function.Definition
 }
 
 func (r DirectoriesFunction) Run(ctx context.Context, req function.RunRequest, resp *function.RunResponse) {
-	var root string
+	var (
+		root string
+		unix bool
+	)
 
-	resp.Error = function.ConcatFuncErrors(req.Arguments.Get(ctx, &root))
+	resp.Error = function.ConcatFuncErrors(req.Arguments.Get(ctx, &root, &unix))
 	if resp.Error != nil {
 		return
 	}
 
-	resp.Error = function.ConcatFuncErrors(resp.Result.Set(ctx, directories(root)))
+	resp.Error = function.ConcatFuncErrors(resp.Result.Set(ctx, directories(root, unix)))
 }
 
-func directories(root string) []string {
+func directories(root string, unix bool) []string {
 	dirs := make([]string, 0)
 	_ = filepath.Walk(root, func(path string, d fs.FileInfo, err error) error {
 		if err == nil && d.IsDir() && path != "." {
-			dirs = append(dirs, path)
+			if !unix {
+				dirs = append(dirs, path)
+			} else {
+				dirs = append(dirs, filepath.ToSlash(path))
+			}
 		}
 		return nil
 	})

@@ -51,7 +51,7 @@ func TestDirectoriesFunction_Known(t *testing.T) {
 			{
 				Config: `
 				output "test" {
-					value = provider::homelab-helpers::directories("${path.module}")
+					value = provider::homelab-helpers::directories("${path.module}", true)
 				}
 				`,
 				ConfigStateChecks: []statecheck.StateCheck{
