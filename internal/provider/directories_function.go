@@ -65,12 +65,34 @@ func (r DirectoriesFunction) Run(ctx context.Context, req function.RunRequest, r
 
 func directories(root string, unix bool) []string {
 	dirs := make([]string, 0)
+
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return dirs
+	}
+
 	_ = filepath.Walk(root, func(path string, d fs.FileInfo, err error) error {
 		if err == nil && d.IsDir() && path != "." {
+			// Get absolute path of current file/directory
+			absPath, err := filepath.Abs(path)
+			if err != nil {
+				return err
+			}
+
+			// Get path relative to root directory
+			relPath, err := filepath.Rel(absRoot, absPath)
+			if err != nil {
+				return err
+			}
+
+			if relPath == "." {
+				return nil
+			}
+
 			if !unix {
-				dirs = append(dirs, path)
+				dirs = append(dirs, relPath)
 			} else {
-				dirs = append(dirs, filepath.ToSlash(path))
+				dirs = append(dirs, filepath.ToSlash(relPath))
 			}
 		}
 		return nil
