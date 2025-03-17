@@ -72,7 +72,10 @@ func files(root string, unix bool) []string {
 	}
 
 	_ = filepath.Walk(root, func(path string, d fs.FileInfo, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
 			return nil
 		}
 
