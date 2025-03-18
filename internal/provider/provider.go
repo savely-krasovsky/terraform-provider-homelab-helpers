@@ -49,8 +49,7 @@ func (p *HomelabHelpers) DataSources(ctx context.Context) []func() datasource.Da
 
 func (p *HomelabHelpers) Functions(ctx context.Context) []func() function.Function {
 	return []func() function.Function{
-		NewDirectoriesFunction,
-		NewFilesFunction,
+		NewDirSetFunction,
 	}
 }
 
