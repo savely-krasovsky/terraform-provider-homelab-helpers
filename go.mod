@@ -6,7 +6,7 @@ toolchain go1.23.1
 
 require (
 	github.com/bmatcuk/doublestar/v4 v4.8.1
-	github.com/hashicorp/terraform-plugin-framework v1.14.1
+	github.com/hashicorp/terraform-plugin-framework v1.15.0
 	github.com/hashicorp/terraform-plugin-go v0.27.0
 	github.com/hashicorp/terraform-plugin-testing v1.13.0
 )
