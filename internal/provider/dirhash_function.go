@@ -95,6 +95,10 @@ func dirhash(path, pattern string) (string, error) {
 		}()
 
 		zf, err := w.Create(filepath.ToSlash(path))
+		if err != nil {
+			return err
+		}
+
 		_, err = io.Copy(zf, rf)
 		if err != nil {
 			return err
