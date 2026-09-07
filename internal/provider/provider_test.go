@@ -1,52 +1,49 @@
 // Copyright (c) HashiCorp, Inc.
+// Copyright (c) 2025, 2026 Savely Krasovsky
 // SPDX-License-Identifier: MPL-2.0
 
 package provider
 
 import (
-	"errors"
-	"io/fs"
-	"log"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
+	"github.com/stretchr/testify/require"
 )
 
-// testAccProtoV6ProviderFactories is used to instantiate a provider during acceptance testing.
-// The factory function is called for each Terraform CLI command to create a provider
-// server that the CLI can connect to and interact with.
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 	"homelab-helpers": providerserver.NewProtocol6WithError(New("test")()),
 }
 
-func TestMain(m *testing.M) {
-	if err := os.Mkdir("example1", 0o744); err != nil && !errors.Is(err, fs.ErrExist) {
-		log.Fatal(err)
-	}
-	defer func() {
-		_ = os.Remove("example1")
-	}()
-	if err := os.Mkdir("example1/example2", 0o744); err != nil && !errors.Is(err, fs.ErrExist) {
-		log.Fatal(err)
-	}
-	defer func() {
-		_ = os.RemoveAll("example1/example2")
-	}()
-	f, err := os.Create("example1/example2/test.txt")
-	if err != nil && !errors.Is(err, fs.ErrExist) {
-		log.Fatal(err)
-	}
-	defer func() {
-		_ = f.Close()
-	}()
-	if err := os.Mkdir("example3", 0o744); err != nil && !errors.Is(err, fs.ErrExist) {
-		log.Fatal(err)
-	}
-	defer func() {
-		_ = os.Remove("example3")
-	}()
+func fixture(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
 
-	m.Run()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "example1/example2"), 0755))
+	require.NoError(t, os.Mkdir(filepath.Join(root, "example3"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "example1/example2/test.txt"), nil, 0644))
+
+	return filepath.ToSlash(root)
+}
+
+func TestProviderSchema(t *testing.T) {
+	server := providerserver.NewProtocol6(New("test")())()
+
+	response, err := server.GetProviderSchema(t.Context(), &tfprotov6.GetProviderSchemaRequest{})
+	require.NoError(t, err)
+	require.Empty(t, response.Diagnostics)
+
+	require.Len(t, response.ResourceSchemas, 1)
+	require.Contains(t, response.ResourceSchemas, "homelab-helpers_deployment")
+	require.Len(t, response.Functions, 2)
+	require.Contains(t, response.Functions, "dirset")
+	require.Contains(t, response.Functions, "dirhash")
+
+	// Scaffolding extension points must not expose its sample objects.
+	require.Empty(t, response.DataSourceSchemas)
+	require.Empty(t, response.EphemeralResourceSchemas)
+	require.Empty(t, response.ActionSchemas)
 }

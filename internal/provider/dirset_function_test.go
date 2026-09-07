@@ -1,4 +1,5 @@
 // Copyright (c) HashiCorp, Inc.
+// Copyright (c) 2025, 2026 Savely Krasovsky
 // SPDX-License-Identifier: MPL-2.0
 
 package provider
@@ -6,85 +7,25 @@ package provider
 import (
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
-	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
-	"github.com/hashicorp/terraform-plugin-testing/statecheck"
-	"github.com/hashicorp/terraform-plugin-testing/tfversion"
+	"github.com/stretchr/testify/require"
 )
 
-func TestDirSetFunction_Known(t *testing.T) {
-	resource.UnitTest(t, resource.TestCase{
-		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
-			tfversion.SkipBelow(tfversion.Version1_8_0),
-		},
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		Steps: []resource.TestStep{
-			{
-				Config: `
-				output "test" {
-					value = provider::homelab-helpers::dirset("${path.module}", "**")
-				}
-				`,
-				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectKnownOutputValue(
-						"test",
-						knownvalue.ListExact([]knownvalue.Check{
-							knownvalue.StringExact("example1"),
-							knownvalue.StringExact("example1/example2"),
-							knownvalue.StringExact("example3"),
-						}),
-					),
-				},
-			},
-		},
-	})
-
-	resource.UnitTest(t, resource.TestCase{
-		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
-			tfversion.SkipBelow(tfversion.Version1_8_0),
-		},
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		Steps: []resource.TestStep{
-			{
-				Config: `
-				output "test" {
-					value = provider::homelab-helpers::dirset("${path.module}/example1", "**")
-				}
-				`,
-				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectKnownOutputValue(
-						"test",
-						knownvalue.ListExact([]knownvalue.Check{
-							knownvalue.StringExact("example2"),
-						}),
-					),
-				},
-			},
-		},
-	})
-
-	resource.UnitTest(t, resource.TestCase{
-		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
-			tfversion.SkipBelow(tfversion.Version1_8_0),
-		},
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		Steps: []resource.TestStep{
-			{
-				Config: `
-				output "test" {
-					value = provider::homelab-helpers::dirset("${path.module}", "example1/**")
-				}
-				`,
-				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectKnownOutputValue(
-						"test",
-						knownvalue.ListExact([]knownvalue.Check{
-							knownvalue.StringExact("example1"),
-							knownvalue.StringExact("example1/example2"),
-						}),
-					),
-				},
-			},
-		},
-	})
+func TestDirSet(t *testing.T) {
+	root := fixture(t)
+	for _, tc := range []struct {
+		directory string
+		pattern   string
+		want      []string
+	}{
+		{root, "**", []string{"example1", "example1/example2", "example3"}},
+		{root + "/example1", "**", []string{"example2"}},
+		{root, "example1/**", []string{"example1", "example1/example2"}},
+		{root, "missing/**", []string{}},
+	} {
+		t.Run(tc.directory+tc.pattern, func(t *testing.T) {
+			got, err := dirset(tc.directory, tc.pattern)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
 }

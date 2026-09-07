@@ -1,22 +1,16 @@
 // Copyright (c) HashiCorp, Inc.
+// Copyright (c) 2025, 2026 Savely Krasovsky
 // SPDX-License-Identifier: MPL-2.0
 
 //go:build generate
 
 package tools
 
-import (
-	_ "github.com/hashicorp/copywrite"
-	_ "github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs"
-)
-
 // Generate copyright headers
-//go:generate go run github.com/hashicorp/copywrite headers -d .. --config ../.copywrite.hcl
+//go:generate go tool copywrite headers -d .. --config ../.copywrite.hcl
 
-// Format Terraform code for use in documentation.
-// If you do not have Terraform installed, you can remove the formatting command, but it is suggested
-// to ensure the documentation is formatted properly.
+// Format examples used in the documentation.
 //go:generate terraform fmt -recursive ../examples/
 
 // Generate documentation.
-//go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-dir .. -provider-name homelab-helpers
+//go:generate go tool tfplugindocs generate --provider-dir .. -provider-name homelab-helpers

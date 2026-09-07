@@ -1,4 +1,5 @@
 // Copyright (c) HashiCorp, Inc.
+// Copyright (c) 2025, 2026 Savely Krasovsky
 // SPDX-License-Identifier: MPL-2.0
 
 package provider
@@ -14,35 +15,25 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-var (
-	_ function.Function = DirSetFunction{}
-)
+var _ function.Function = dirSetFunction{}
 
-func NewDirSetFunction() function.Function {
-	return DirSetFunction{}
-}
+type dirSetFunction struct{}
 
-type DirSetFunction struct{}
-
-func (r DirSetFunction) Metadata(_ context.Context, req function.MetadataRequest, resp *function.MetadataResponse) {
+func (r dirSetFunction) Metadata(_ context.Context, req function.MetadataRequest, resp *function.MetadataResponse) {
 	resp.Name = "dirset"
 }
 
-func (r DirSetFunction) Definition(_ context.Context, _ function.DefinitionRequest, resp *function.DefinitionResponse) {
+func (r dirSetFunction) Definition(_ context.Context, _ function.DefinitionRequest, resp *function.DefinitionResponse) {
 	resp.Definition = function.Definition{
 		Summary: "Walks the file tree rooted at root and finds all directories",
 		Parameters: []function.Parameter{
 			function.StringParameter{
-				AllowNullValue:     false,
-				AllowUnknownValues: false,
-				Description:        "The path to walk",
-				Name:               "path",
+				Description: "The path to walk",
+				Name:        "path",
 			},
 			function.StringParameter{
-				AllowNullValue:     false,
-				AllowUnknownValues: false,
-				Description:        "The pattern to match",
-				Name:               "pattern",
+				Description: "The pattern to match",
+				Name:        "pattern",
 			},
 		},
 		Return: function.ListReturn{
@@ -51,24 +42,24 @@ func (r DirSetFunction) Definition(_ context.Context, _ function.DefinitionReque
 	}
 }
 
-func (r DirSetFunction) Run(ctx context.Context, req function.RunRequest, resp *function.RunResponse) {
+func (r dirSetFunction) Run(ctx context.Context, req function.RunRequest, resp *function.RunResponse) {
 	var (
 		path    string
 		pattern string
 	)
 
-	resp.Error = function.ConcatFuncErrors(req.Arguments.Get(ctx, &path, &pattern))
+	resp.Error = req.Arguments.Get(ctx, &path, &pattern)
 	if resp.Error != nil {
 		return
 	}
 
-	dd, err := dirset(path, pattern)
+	directories, err := dirset(path, pattern)
 	if err != nil {
 		resp.Error = function.NewFuncError(err.Error())
 		return
 	}
 
-	resp.Error = function.ConcatFuncErrors(resp.Result.Set(ctx, dd))
+	resp.Error = resp.Result.Set(ctx, directories)
 }
 
 func dirset(path, pattern string) ([]string, error) {
@@ -76,10 +67,7 @@ func dirset(path, pattern string) ([]string, error) {
 
 	fsys := os.DirFS(path)
 	if err := doublestar.GlobWalk(fsys, pattern, func(path string, d fs.DirEntry) error {
-		if !d.IsDir() {
-			return nil
-		}
-		if path == "." {
+		if !d.IsDir() || path == "." {
 			return nil
 		}
 

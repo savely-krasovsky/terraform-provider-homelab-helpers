@@ -1,64 +1,116 @@
-# Terraform Provider Scaffolding (Terraform Plugin Framework)
+# Homelab Helpers Terraform Provider
 
-_This template repository is built on the [Terraform Plugin Framework](https://github.com/hashicorp/terraform-plugin-framework). The template repository built on the [Terraform Plugin SDK](https://github.com/hashicorp/terraform-plugin-sdk) can be found at [terraform-provider-scaffolding](https://github.com/hashicorp/terraform-provider-scaffolding). See [Which SDK Should I Use?](https://developer.hashicorp.com/terraform/plugin/framework-benefits) in the Terraform documentation for additional information._
+Utilities and a declarative deployment resource for a Fedora CoreOS homelab.
+Uses Terraform Plugin Framework and plugin protocol v6. The project follows the
+[HashiCorp scaffolding baseline](MIGRATION.md#scaffolding-baseline), with
+pure Go builds for Linux and macOS.
 
-This repository is a *template* for a [Terraform](https://www.terraform.io) provider. It is intended as a starting point for creating Terraform providers, containing:
+- `dirset(path, pattern)` lists directories matching a doublestar glob.
+- `dirhash(path, pattern)` hashes matching file names and contents using the
+  original ZIP-based format.
+- [`homelab-helpers_deployment`](docs/resources/deployment.md) applies rootless
+  Podman/Quadlet configuration over verified SSH and SFTP.
 
-- A resource and a data source (`internal/provider/`),
-- Examples (`examples/`) and generated documentation (`docs/`),
-- Miscellaneous meta files.
+Functions require Terraform/OpenTofu 1.8+; deployment requires 1.11+ for
+write-only arguments. The provider runs on the apply machine;
+no provider binary, Go runtime or SDK library is installed on FCOS.
 
-These files contain boilerplate code that you will need to edit to create your own Terraform provider. Tutorials for creating Terraform providers can be found on the [HashiCorp Developer](https://developer.hashicorp.com/terraform/tutorials/providers-plugin-framework) platform. _Terraform Plugin Framework specific guides are titled accordingly._
+## Deployment lifecycle
 
-Please see the [GitHub template repository documentation](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/creating-a-repository-from-a-template) for how to create a new repository from this template on GitHub.
+The resource stages the complete configuration on the host and checks it with
+that host's Quadlet generator and `nft --check`. Before changing live files or
+secrets it records ownership in a pending journal. It then installs changed
+secrets supplied by the caller, atomically replaces files, reloads the systemd
+user manager and restarts affected groups in one transaction. Put a pod and all its containers
+in the same group. Include mounted configuration in the group's `hash`.
 
-Once you've written your provider, you'll want to [publish it on the Terraform Registry](https://developer.hashicorp.com/terraform/registry/providers/publishing) so that others can use it.
+Refresh reads actual configuration and firewall fingerprints, checks native unit
+enablement, the journal and secret existence. Drift produces an update in the
+next plan. It does not poll container health or compare the live kernel firewall
+ruleset; a deployment reapplies the validated persistent ruleset.
 
-## Requirements
+Pass secret values through `secret_values_wo`, preferably from an ephemeral
+resource or variable. The caller resolves values from their source; the provider
+installs them on the target host.
+Write-only values are read from configuration during Create/Update, never from
+plan or state. They are excluded from configuration fingerprints and journals.
+Configuration in `files` and `firewall` does enter state: use secret references
+instead of embedding secret values there.
 
-- [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.0
-- [Go](https://golang.org/doc/install) >= 1.22
+The `secrets` map holds non-secret source references or versions keyed by
+destination name. Supply exactly the same keys in `secret_values_wo`, with
+nonempty values. `restic_*` names are installed in
+`/etc/credstore` with underscores normalized to hyphens and permissions `0600`;
+other names become Podman secrets. Bump `secrets_revision` to install rotated
+values without changing their references. A write-only value change alone does
+not trigger an update. Changed references and missing secrets also trigger
+installation and consumer restarts. Removed references are retained on the host,
+since backup services can still use them. Remove retired credentials explicitly
+after their consumers have migrated.
 
-## Building The Provider
+A host-side `flock` serializes deployment operations. Interrupted applies keep
+`~/.local/state/homelab/config-pending.json`; retrying reconciles both old and
+partially applied ownership. Never delete the journal to work around an error.
 
-1. Clone the repository
-1. Enter the repository directory
-1. Build the provider using the Go `install` command:
+Destroy stops owned user units and removes owned files from `.config`, including
+ownership recorded by interrupted applies. It preserves application data,
+Podman volumes/networks, credentials, and the host firewall. Files unknown to the
+manifest are preserved. One resource must own a user's configuration tree; do not
+point multiple resources or states at the same home directory.
 
-```shell
-go install
+## SSH prerequisites
+
+The target needs Linux, OpenSSH with SFTP and POSIX rename support, rootless
+Podman/Quadlet, a working systemd user manager, `flock`, nftables, SELinux tools,
+and passwordless sudo for host configuration. FCOS already supplies these.
+
+The provider checks `~/.ssh/known_hosts` by default. Alternatively configure a
+trusted public `host_key`. Unknown or changed keys are rejected; verify a newly
+created VM's key through a trusted console before adding it to known_hosts.
+OpenSSH client config, ProxyJump and password authentication are not evaluated.
+Use `private_key_file` or an existing `SSH_AUTH_SOCK`; encrypted private keys must
+be loaded into the agent. Remote home paths must be absolute without symlinks
+(use `/var/home/core` on FCOS).
+
+## Development
+
+Use Go 1.27, Make and golangci-lint 2.13.2. Builds use `CGO_ENABLED=0`.
+
+```sh
+make build
+make test vet lint
 ```
 
-## Adding Dependencies
+Tests use temporary directories, fake host operations and a loopback SSH/SFTP
+server. They do not access a real homelab or external secret stores. Filesystem
+tests check interrupted applies, drift repair, ownership and credential
+bytes/modes; protocol tests check schema validation, defaults, unknown values,
+write-only nullification and fingerprints independent of secret values.
 
-This provider uses [Go modules](https://github.com/golang/go/wiki/Modules).
-Please see the Go documentation for the most up to date information about using Go modules.
+`make testacc` runs Terraform CLI acceptance tests against a temporary local
+configuration. Set `TF_ACC_TERRAFORM_PATH` to an absolute OpenTofu path to test
+OpenTofu instead. Acceptance coverage includes the two functions and a deployment
+plan; it does not run deployment CRUD against a live host. CI uses the template
+Terraform 1.13/1.14 matrix and also checks OpenTofu 1.12.6.
 
-To add a new dependency `github.com/author/dependency` to your Terraform provider:
+`make generate` runs copywrite, formats examples and regenerates schema
+documentation through `go generate` in the separate `tools` module. It updates
+copyright headers as well as docs. The two tools use Go's `tool` directive;
+generated content is checked for drift in the template's generate job.
 
-```shell
-go get github.com/author/dependency
-go mod tidy
-```
+For local use before publishing, build the provider and configure a scoped
+[development override](MIGRATION.md#local-development-before-publishing).
 
-Then commit the changes to `go.mod` and `go.sum`.
+## Releases
 
-## Using the provider
+A `v*` tag runs one GoReleaser job on Ubuntu. Go cross-compiles Linux and macOS
+amd64/arm64 binaries with CGO disabled. GoReleaser creates the registry ZIPs,
+manifest, SHA-256 checksums, GPG signature and GitHub release, following the
+scaffolding configuration. Release tooling uses GoReleaser 2.18.1.
 
-Fill this in for each provider
+Run `goreleaser check` to validate release configuration. Use
+`goreleaser build --snapshot --single-target` to check a release binary
+for the current platform locally without publishing anything.
 
-## Developing the Provider
-
-If you wish to work on the provider, you'll first need [Go](http://www.golang.org) installed on your machine (see [Requirements](#requirements) above).
-
-To compile the provider, run `go install`. This will build the provider and put the provider binary in the `$GOPATH/bin` directory.
-
-To generate or update documentation, run `make generate`.
-
-In order to run the full suite of Acceptance tests, run `make testacc`.
-
-*Note:* Acceptance tests create real resources, and often cost money to run.
-
-```shell
-make testacc
-```
+See [MIGRATION.md](MIGRATION.md) for the scaffolding comparison and transition
+from the old homelab provisioners.

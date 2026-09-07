@@ -1,24 +1,36 @@
-default: fmt lint install generate
+GO ?= go
+VERSION ?= dev
+BUILD_DIR ?= bin
+
+export CGO_ENABLED = 0
+export GOWORK = off
+
+LDFLAGS = -X main.version=$(patsubst v%,%,$(VERSION))
+
+.PHONY: build install fmt lint test testacc vet generate check
 
 build:
-	go build -v ./...
+	$(GO) build -trimpath -ldflags '$(LDFLAGS)' -o $(BUILD_DIR)/terraform-provider-homelab-helpers .
 
-install: build
-	go install -v ./...
+install:
+	$(GO) install -trimpath -ldflags '$(LDFLAGS)' .
+
+fmt:
+	gofmt -w main.go internal tools/tools.go
 
 lint:
 	golangci-lint run
 
-generate:
-	cd tools; go generate ./...
-
-fmt:
-	gofmt -s -w -e .
+vet:
+	$(GO) vet ./...
 
 test:
-	go test -v -cover -timeout=120s -parallel=10 ./...
+	$(GO) test -timeout 2m ./...
 
 testacc:
-	TF_ACC=1 go test -v -cover -timeout 120m ./...
+	TF_ACC=1 TF_ACC_PROVIDER_NAMESPACE=savely-krasovsky $(GO) test -timeout 10m -run TestAcc ./internal/provider
 
-.PHONY: fmt lint test testacc build install generate
+generate:
+	cd tools && $(GO) generate -tags generate ./...
+
+check: test vet lint
