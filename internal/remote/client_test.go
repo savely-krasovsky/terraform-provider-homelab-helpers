@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/rsa"
 	"encoding/pem"
 	"io"
 	"net"
@@ -24,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 func testServer(t *testing.T, options ...sshserver.Option) Config {
@@ -135,16 +137,73 @@ func TestSSHFilesAndCommands(t *testing.T) {
 	require.Error(t, client.WriteFile(t.Context(), link, []byte("bad"), 0600))
 }
 
+func TestSSHSelectsTrustedHostKey(t *testing.T) {
+	private, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	rsaSigner, err := ssh.NewSignerFromKey(private)
+	require.NoError(t, err)
+
+	for _, algorithm := range []string{"ed25519", "rsa"} {
+		for _, source := range []string{"pinned", "known_hosts", "hashed_known_hosts"} {
+			t.Run(algorithm+"/"+source, func(t *testing.T) {
+				config := testServer(t, func(server *sshserver.Server) error {
+					server.AddHostKey(rsaSigner)
+
+					return nil
+				})
+				if algorithm == "rsa" {
+					config.HostKey = strings.TrimSpace(string(ssh.MarshalAuthorizedKey(rsaSigner.PublicKey())))
+				}
+
+				if source != "pinned" {
+					address := knownhosts.Normalize(net.JoinHostPort(config.Host, strconv.Itoa(config.Port)))
+					if source == "hashed_known_hosts" {
+						address = knownhosts.HashHostname(address)
+					}
+
+					config.KnownHostsFile = filepath.Join(t.TempDir(), "known_hosts")
+					require.NoError(t, os.WriteFile(config.KnownHostsFile, []byte(address+" "+config.HostKey+"\n"), 0600))
+					config.HostKey = ""
+				}
+
+				client, err := Connect(t.Context(), config)
+				require.NoError(t, err)
+				defer client.Close()
+			})
+		}
+	}
+}
+
 func TestSSHRejectsUntrustedHost(t *testing.T) {
-	config := testServer(t)
 	_, other, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	signer, err := ssh.NewSignerFromKey(other)
 	require.NoError(t, err)
-	config.HostKey = string(ssh.MarshalAuthorizedKey(signer.PublicKey()))
 
-	_, err = Connect(t.Context(), config)
-	require.ErrorContains(t, err, "host key mismatch")
+	for _, source := range []string{"pinned", "known_hosts", "unknown_host"} {
+		t.Run(source, func(t *testing.T) {
+			config := testServer(t)
+			config.HostKey = string(ssh.MarshalAuthorizedKey(signer.PublicKey()))
+			expected := "key mismatch"
+
+			if source != "pinned" {
+				address := knownhosts.HashHostname(knownhosts.Normalize(net.JoinHostPort(config.Host, strconv.Itoa(config.Port))))
+				content := address + " " + config.HostKey
+				if source == "unknown_host" {
+					content = ""
+					expected = "key is unknown"
+				}
+
+				config.KnownHostsFile = filepath.Join(t.TempDir(), "known_hosts")
+				require.NoError(t, os.WriteFile(config.KnownHostsFile, []byte(content), 0600))
+				config.HostKey = ""
+			}
+
+			client, err := Connect(t.Context(), config)
+			require.ErrorContains(t, err, expected)
+			require.Nil(t, client)
+		})
+	}
 }
 
 func TestSFTPFailureClosesSSH(t *testing.T) {

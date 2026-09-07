@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/pkg/sftp"
+	"github.com/skeema/knownhosts"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
-	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 type Config struct {
@@ -51,7 +51,8 @@ func expandHome(name string) (string, error) {
 }
 
 func Connect(ctx context.Context, config Config) (*Client, error) {
-	verify, err := hostVerifier(config)
+	address := net.JoinHostPort(config.Host, fmt.Sprint(config.Port))
+	verify, algorithms, err := hostVerifier(config, address)
 	if err != nil {
 		return nil, err
 	}
@@ -66,11 +67,11 @@ func Connect(ctx context.Context, config Config) (*Client, error) {
 		defer agentConn.Close()
 	}
 
-	address := net.JoinHostPort(config.Host, fmt.Sprint(config.Port))
 	sshConfig := &ssh.ClientConfig{
-		User:            config.User,
-		Auth:            auth,
-		HostKeyCallback: verify,
+		User:              config.User,
+		Auth:              auth,
+		HostKeyCallback:   verify,
+		HostKeyAlgorithms: algorithms,
 	}
 
 	// A newly booted VM may not have started sshd yet. Authentication and host
@@ -118,27 +119,32 @@ func (c *Client) Close() {
 	_ = c.ssh.Close()
 }
 
-func hostVerifier(config Config) (ssh.HostKeyCallback, error) {
+func hostVerifier(config Config, address string) (ssh.HostKeyCallback, []string, error) {
 	if config.HostKey != "" {
 		key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(config.HostKey))
 		if err != nil {
-			return nil, fmt.Errorf("parse SSH host_key: %w", err)
+			return nil, nil, fmt.Errorf("parse SSH host_key: %w", err)
 		}
 
-		return ssh.FixedHostKey(key), nil
+		algorithms := []string{key.Type()}
+		if key.Type() == ssh.KeyAlgoRSA {
+			algorithms = []string{ssh.KeyAlgoRSASHA512, ssh.KeyAlgoRSASHA256}
+		}
+
+		return ssh.FixedHostKey(key), algorithms, nil
 	}
 
 	filename, err := expandHome(config.KnownHostsFile)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	callback, err := knownhosts.New(filename)
+	db, err := knownhosts.NewDB(filename)
 	if err != nil {
-		return nil, fmt.Errorf("read known_hosts (or configure a trusted host_key): %w", err)
+		return nil, nil, fmt.Errorf("read known_hosts (or configure a trusted host_key): %w", err)
 	}
 
-	return callback, nil
+	return db.HostKeyCallback(), db.HostKeyAlgorithms(address), nil
 }
 
 func authentication(ctx context.Context, filename string) ([]ssh.AuthMethod, net.Conn, error) {
