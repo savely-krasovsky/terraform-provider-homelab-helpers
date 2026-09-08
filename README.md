@@ -1,13 +1,13 @@
 # Homelab Helpers Terraform Provider
 
-Utilities and a declarative deployment resource for a Fedora CoreOS homelab.
+Utilities and a declarative deployment resource for my Fedora CoreOS homelab.
 Uses Terraform Plugin Framework and plugin protocol v6. The project follows the
-[HashiCorp scaffolding baseline](MIGRATION.md#scaffolding-baseline), with
+[HashiCorp scaffolding baseline](https://github.com/hashicorp/terraform-provider-scaffolding-framework/tree/ae0e7c85859bf23055354246bb9b75f5686d8558), with
 pure Go builds for Linux and macOS.
 
 - `dirset(path, pattern)` lists directories matching a doublestar glob.
 - `dirhash(path, pattern)` hashes matching file names and contents using the
-  original ZIP-based format.
+  ZIP-based format.
 - [`homelab-helpers_deployment`](docs/resources/deployment.md) applies rootless
   Podman/Quadlet configuration over verified SSH and SFTP.
 
@@ -46,7 +46,7 @@ values without changing their references. A write-only value change alone does
 not trigger an update. Changed references and missing secrets also trigger
 installation and consumer restarts. Removed references are retained on the host,
 since backup services can still use them. Remove retired credentials explicitly
-after their consumers have migrated.
+when no service uses them.
 
 A host-side `flock` serializes deployment operations. Interrupted applies keep
 `~/.local/state/homelab/config-pending.json`; retrying reconciles both old and
@@ -98,8 +98,9 @@ documentation through `go generate` in the separate `tools` module. It updates
 copyright headers as well as docs. The two tools use Go's `tool` directive;
 generated content is checked for drift in the template's generate job.
 
-For local use before publishing, build the provider and configure a scoped
-[development override](MIGRATION.md#local-development-before-publishing).
+For local use, build the provider and configure `dev_overrides` in the homelab's
+ignored `.terraformrc`. See the
+[homelab configuration instructions](../homelab/README.md#applying-configuration-changes).
 
 ## Releases
 
@@ -111,6 +112,3 @@ scaffolding configuration. Release tooling uses GoReleaser 2.18.1.
 Run `goreleaser check` to validate release configuration. Use
 `goreleaser build --snapshot --single-target` to check a release binary
 for the current platform locally without publishing anything.
-
-See [MIGRATION.md](MIGRATION.md) for the scaffolding comparison and transition
-from the old homelab provisioners.

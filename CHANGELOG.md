@@ -4,7 +4,7 @@ FEATURES:
 
 - Add `homelab-helpers_deployment`: verified SSH/SFTP, Quadlet and nftables
   validation, write-only secret installation, drift detection and interruption
-  recovery. Adopt existing homelab manifests and pending journals.
+  recovery.
 
 ENHANCEMENTS:
 
