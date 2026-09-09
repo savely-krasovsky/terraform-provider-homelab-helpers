@@ -19,8 +19,8 @@ func TestAccFunctions(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{{
 			Config: fmt.Sprintf(`
-    output "hash" { value = provider::homelab-helpers::dirhash(%q, "example1/**") }
-    output "directories" { value = provider::homelab-helpers::dirset(%q, "**") }
+    output "hash" { value = provider::homelab::dirhash(%q, "example1/**") }
+    output "directories" { value = provider::homelab::dirset(%q, "**") }
    `, root, root),
 			ConfigStateChecks: []statecheck.StateCheck{
 				statecheck.ExpectKnownOutputValue("hash", knownvalue.StringExact("f0c5942360b2f167c8b99b3771f6f22a3b7c4e623046586b2f5aee730c4d1e31")),
@@ -34,7 +34,7 @@ func TestAccFunctions(t *testing.T) {
 	})
 }
 
-func TestAccDeploymentPlan(t *testing.T) {
+func TestAccHomelabConfigPlan(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{{
@@ -48,7 +48,7 @@ func TestAccDeploymentPlan(t *testing.T) {
      default = "test-password"
     }
 
-    resource "homelab-helpers_deployment" "test" {
+    resource "homelab_config" "test" {
      host = "192.0.2.10"
      files = {}
      units = []

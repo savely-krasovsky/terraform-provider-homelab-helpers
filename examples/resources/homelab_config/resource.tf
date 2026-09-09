@@ -1,4 +1,4 @@
-resource "homelab-helpers_deployment" "fcos" {
+resource "homelab_config" "fcos" {
   host             = "192.0.2.10"
   user             = "core"
   private_key_file = "~/.ssh/id_ed25519"

@@ -27,7 +27,7 @@ type homelabHelpers struct {
 }
 
 func (p *homelabHelpers) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
-	resp.TypeName = "homelab-helpers"
+	resp.TypeName = "homelab"
 	resp.Version = p.version
 }
 
@@ -43,7 +43,7 @@ func (p *homelabHelpers) Configure(context.Context, provider.ConfigureRequest, *
 
 func (p *homelabHelpers) Resources(context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		func() resource.Resource { return &deploymentResource{} },
+		func() resource.Resource { return &homelabConfigResource{} },
 	}
 }
 

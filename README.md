@@ -8,8 +8,12 @@ pure Go builds for Linux and macOS.
 - `dirset(path, pattern)` lists directories matching a doublestar glob.
 - `dirhash(path, pattern)` hashes matching file names and contents using the
   ZIP-based format.
-- [`homelab-helpers_deployment`](docs/resources/deployment.md) applies rootless
+- [`homelab_config`](docs/resources/config.md) applies rootless
   Podman/Quadlet configuration over verified SSH and SFTP.
+
+Use `homelab` as the local provider name in `required_providers`, with source
+`savely-krasovsky/homelab-helpers`. Functions use `provider::homelab::dirset` and
+`provider::homelab::dirhash`; the registry address and binary name are unchanged.
 
 Functions require Terraform/OpenTofu 1.8+; deployment requires 1.11+ for
 write-only arguments. The provider runs on the apply machine;

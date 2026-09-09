@@ -20,7 +20,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-func (r *deploymentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *homelabConfigResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Applies a rootless Podman/Quadlet deployment over verified SSH and SFTP. Secret values are supplied through a write-only argument and never stored in plan or state. Requires Terraform 1.11+ or OpenTofu 1.11+. Destroy stops managed units and removes owned configuration files; application data, firewall and credentials are retained.",
 		Attributes: map[string]schema.Attribute{

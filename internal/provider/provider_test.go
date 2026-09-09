@@ -15,7 +15,7 @@ import (
 )
 
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
-	"homelab-helpers": providerserver.NewProtocol6WithError(New("test")()),
+	"homelab": providerserver.NewProtocol6WithError(New("test")()),
 }
 
 func fixture(t *testing.T) string {
@@ -37,7 +37,7 @@ func TestProviderSchema(t *testing.T) {
 	require.Empty(t, response.Diagnostics)
 
 	require.Len(t, response.ResourceSchemas, 1)
-	require.Contains(t, response.ResourceSchemas, "homelab-helpers_deployment")
+	require.Contains(t, response.ResourceSchemas, "homelab_config")
 	require.Len(t, response.Functions, 2)
 	require.Contains(t, response.Functions, "dirset")
 	require.Contains(t, response.Functions, "dirhash")

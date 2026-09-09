@@ -2,12 +2,13 @@
 
 FEATURES:
 
-- Add `homelab-helpers_deployment`: verified SSH/SFTP, Quadlet and nftables
+- Add `homelab_config`: verified SSH/SFTP, Quadlet and nftables
   validation, write-only secret installation, drift detection and interruption
   recovery.
 
 ENHANCEMENTS:
 
+- Use the local provider name `homelab`.
 - Update to Go 1.27 and align project tooling with HashiCorp scaffolding ae0e7c8.
 - Build Linux and macOS amd64/arm64 releases in one GoReleaser job without CGO.
 - Use isolated function-test fixtures and add deployment protocol/engine tests.

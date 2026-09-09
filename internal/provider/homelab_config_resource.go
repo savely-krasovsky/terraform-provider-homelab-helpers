@@ -22,19 +22,19 @@ import (
 )
 
 var (
-	_ resource.Resource                   = (*deploymentResource)(nil)
-	_ resource.ResourceWithModifyPlan     = (*deploymentResource)(nil)
-	_ resource.ResourceWithValidateConfig = (*deploymentResource)(nil)
+	_ resource.Resource                   = (*homelabConfigResource)(nil)
+	_ resource.ResourceWithModifyPlan     = (*homelabConfigResource)(nil)
+	_ resource.ResourceWithValidateConfig = (*homelabConfigResource)(nil)
 )
 
-type deploymentResource struct{}
+type homelabConfigResource struct{}
 
-func (r *deploymentResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_deployment"
+func (r *homelabConfigResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_config"
 }
 
-func (r *deploymentResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
-	var model deploymentModel
+func (r *homelabConfigResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var model homelabConfigModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &model)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -69,12 +69,12 @@ func (r *deploymentResource) ValidateConfig(ctx context.Context, req resource.Va
 	}
 }
 
-func (r *deploymentResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+func (r *homelabConfigResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	if req.Plan.Raw.IsNull() {
 		return
 	}
 
-	var model deploymentModel
+	var model homelabConfigModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &model)...)
 	if resp.Diagnostics.HasError() || !model.known(ctx) {
 		return
@@ -90,8 +90,8 @@ func (r *deploymentResource) ModifyPlan(ctx context.Context, req resource.Modify
 	resp.Diagnostics.Append(resp.Plan.Set(ctx, &model)...)
 }
 
-func (r *deploymentResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var model deploymentModel
+func (r *homelabConfigResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var model homelabConfigModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &model)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -103,8 +103,8 @@ func (r *deploymentResource) Create(ctx context.Context, req resource.CreateRequ
 	}
 }
 
-func (r *deploymentResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var model deploymentModel
+func (r *homelabConfigResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var model homelabConfigModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &model)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -116,7 +116,7 @@ func (r *deploymentResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 }
 
-func (r *deploymentResource) apply(ctx context.Context, model *deploymentModel, config tfsdk.Config) diag.Diagnostics {
+func (r *homelabConfigResource) apply(ctx context.Context, model *homelabConfigModel, config tfsdk.Config) diag.Diagnostics {
 	payload, diagnostics := model.payload(ctx)
 	if diagnostics.HasError() {
 		return diagnostics
@@ -151,8 +151,8 @@ func (r *deploymentResource) apply(ctx context.Context, model *deploymentModel, 
 	return diagnostics
 }
 
-func (r *deploymentResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var model deploymentModel
+func (r *homelabConfigResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var model homelabConfigModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &model)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -181,8 +181,8 @@ func (r *deploymentResource) Read(ctx context.Context, req resource.ReadRequest,
 	resp.Diagnostics.Append(resp.State.Set(ctx, &model)...)
 }
 
-func (r *deploymentResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var model deploymentModel
+func (r *homelabConfigResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var model homelabConfigModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &model)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -205,9 +205,9 @@ func (r *deploymentResource) Delete(ctx context.Context, req resource.DeleteRequ
 	}
 }
 
-func (r *deploymentResource) withHost(
+func (r *homelabConfigResource) withHost(
 	ctx context.Context,
-	model deploymentModel,
+	model homelabConfigModel,
 	prepare bool,
 	operation func(context.Context, deployment.Engine) error,
 ) error {

@@ -15,7 +15,7 @@ import (
 	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/deployment"
 )
 
-type deploymentModel struct {
+type homelabConfigModel struct {
 	ID              types.String `tfsdk:"id"`
 	Revision        types.String `tfsdk:"revision"`
 	Host            types.String `tfsdk:"host"`
@@ -43,7 +43,7 @@ type groupModel struct {
 	UsesSecrets types.Bool   `tfsdk:"uses_secrets"`
 }
 
-func (m deploymentModel) known(ctx context.Context) bool {
+func (m homelabConfigModel) known(ctx context.Context) bool {
 	for _, a := range []attr.Value{m.Files, m.Units, m.Groups, m.Firewall, m.Secrets, m.SecretsRevision} {
 		value, err := a.ToTerraformValue(ctx)
 		if err != nil || !value.IsFullyKnown() {
@@ -54,7 +54,7 @@ func (m deploymentModel) known(ctx context.Context) bool {
 	return true
 }
 
-func (m deploymentModel) payload(ctx context.Context) (deployment.Payload, diag.Diagnostics) {
+func (m homelabConfigModel) payload(ctx context.Context) (deployment.Payload, diag.Diagnostics) {
 	var (
 		payload     deployment.Payload
 		groups      map[string]groupModel
@@ -86,7 +86,7 @@ func (m deploymentModel) payload(ctx context.Context) (deployment.Payload, diag.
 	return payload, diagnostics
 }
 
-func (m deploymentModel) timeout() (time.Duration, error) {
+func (m homelabConfigModel) timeout() (time.Duration, error) {
 	duration, err := time.ParseDuration(m.Timeout.ValueString())
 	if err != nil || duration <= 0 {
 		return 0, fmt.Errorf("timeout must be a positive Go duration, for example 15m")

@@ -20,7 +20,7 @@ func protocolConfig(t *testing.T) (tfprotov6.ProviderServer, tftypes.Object, map
 	require.NoError(t, err)
 	require.Empty(t, schema.Diagnostics)
 
-	resourceType, ok := schema.ResourceSchemas["homelab-helpers_deployment"].ValueType().(tftypes.Object)
+	resourceType, ok := schema.ResourceSchemas["homelab_config"].ValueType().(tftypes.Object)
 	require.True(t, ok)
 	values := map[string]tftypes.Value{}
 	for name, typ := range resourceType.AttributeTypes {
@@ -45,10 +45,10 @@ func dynamic(t *testing.T, typ tftypes.Type, value any) *tfprotov6.DynamicValue 
 	return &result
 }
 
-func TestDeploymentProtocolPlanAndDrift(t *testing.T) {
+func TestHomelabConfigProtocolPlanAndDrift(t *testing.T) {
 	server, typ, config := protocolConfig(t)
 	request := &tfprotov6.PlanResourceChangeRequest{
-		TypeName:         "homelab-helpers_deployment",
+		TypeName:         "homelab_config",
 		PriorState:       dynamic(t, typ, nil),
 		ProposedNewState: dynamic(t, typ, config),
 		Config:           dynamic(t, typ, config),
@@ -84,11 +84,11 @@ func TestDeploymentProtocolPlanAndDrift(t *testing.T) {
 	require.Equal(t, tftypes.NewValue(tftypes.String, "existing"), values["id"])
 }
 
-func TestDeploymentProtocolUnknownAndInvalidInput(t *testing.T) {
+func TestHomelabConfigProtocolUnknownAndInvalidInput(t *testing.T) {
 	server, typ, config := protocolConfig(t)
 	config["files"] = tftypes.NewValue(typ.AttributeTypes["files"], tftypes.UnknownValue)
 	response, err := server.PlanResourceChange(t.Context(), &tfprotov6.PlanResourceChangeRequest{
-		TypeName:         "homelab-helpers_deployment",
+		TypeName:         "homelab_config",
 		PriorState:       dynamic(t, typ, nil),
 		ProposedNewState: dynamic(t, typ, config),
 		Config:           dynamic(t, typ, config),
@@ -100,7 +100,7 @@ func TestDeploymentProtocolUnknownAndInvalidInput(t *testing.T) {
 		"../escape": tftypes.NewValue(tftypes.String, "content"),
 	})
 	validation, err := server.ValidateResourceConfig(t.Context(), &tfprotov6.ValidateResourceConfigRequest{
-		TypeName: "homelab-helpers_deployment",
+		TypeName: "homelab_config",
 		Config:   dynamic(t, typ, config),
 	})
 	require.NoError(t, err)
@@ -108,7 +108,7 @@ func TestDeploymentProtocolUnknownAndInvalidInput(t *testing.T) {
 	require.Contains(t, validation.Diagnostics[0].Detail, "invalid managed path")
 }
 
-func TestDeploymentConnectionValidation(t *testing.T) {
+func TestHomelabConfigConnectionValidation(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		attribute string
@@ -144,7 +144,7 @@ func TestDeploymentConnectionValidation(t *testing.T) {
 			config["files"] = tftypes.NewValue(typ.AttributeTypes["files"], tftypes.UnknownValue)
 
 			response, err := server.ValidateResourceConfig(t.Context(), &tfprotov6.ValidateResourceConfigRequest{
-				TypeName: "homelab-helpers_deployment",
+				TypeName: "homelab_config",
 				Config:   dynamic(t, typ, config),
 			})
 			require.NoError(t, err)
@@ -162,7 +162,7 @@ func TestDeploymentConnectionValidation(t *testing.T) {
 	}
 }
 
-func TestDeploymentWriteOnlyPlan(t *testing.T) {
+func TestHomelabConfigWriteOnlyPlan(t *testing.T) {
 	server, typ, config := protocolConfig(t)
 	config["secrets"] = tftypes.NewValue(typ.AttributeTypes["secrets"], map[string]tftypes.Value{
 		"app_password": tftypes.NewValue(tftypes.String, "source-reference"),
@@ -173,7 +173,7 @@ func TestDeploymentWriteOnlyPlan(t *testing.T) {
 		config["secret_values_wo"] = tftypes.NewValue(typ.AttributeTypes["secret_values_wo"], value)
 
 		response, err := server.PlanResourceChange(t.Context(), &tfprotov6.PlanResourceChangeRequest{
-			TypeName:         "homelab-helpers_deployment",
+			TypeName:         "homelab_config",
 			PriorState:       dynamic(t, typ, nil),
 			ProposedNewState: dynamic(t, typ, config),
 			Config:           dynamic(t, typ, config),
@@ -209,7 +209,7 @@ func TestDeploymentWriteOnlyPlan(t *testing.T) {
 	require.NotEqual(t, bumped["revision"], changedReference["revision"])
 }
 
-func TestDeploymentWriteOnlyValidation(t *testing.T) {
+func TestHomelabConfigWriteOnlyValidation(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		values  any
@@ -231,7 +231,7 @@ func TestDeploymentWriteOnlyValidation(t *testing.T) {
 			config["secret_values_wo"] = tftypes.NewValue(typ.AttributeTypes["secret_values_wo"], tc.values)
 
 			response, err := server.ValidateResourceConfig(t.Context(), &tfprotov6.ValidateResourceConfigRequest{
-				TypeName: "homelab-helpers_deployment",
+				TypeName: "homelab_config",
 				Config:   dynamic(t, typ, config),
 				ClientCapabilities: &tfprotov6.ValidateResourceConfigClientCapabilities{
 					WriteOnlyAttributesAllowed: true,
@@ -251,7 +251,7 @@ func TestDeploymentWriteOnlyValidation(t *testing.T) {
 	}
 }
 
-func TestDeploymentApplyRejectsInvalidInput(t *testing.T) {
+func TestHomelabConfigApplyRejectsInvalidInput(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		attribute string
@@ -301,7 +301,7 @@ func TestDeploymentApplyRejectsInvalidInput(t *testing.T) {
 			planned := maps.Clone(config)
 			planned["secret_values_wo"] = tftypes.NewValue(typ.AttributeTypes["secret_values_wo"], nil)
 			response, err := server.ApplyResourceChange(t.Context(), &tfprotov6.ApplyResourceChangeRequest{
-				TypeName:     "homelab-helpers_deployment",
+				TypeName:     "homelab_config",
 				PriorState:   dynamic(t, typ, nil),
 				PlannedState: dynamic(t, typ, planned),
 				Config:       dynamic(t, typ, config),
@@ -314,10 +314,10 @@ func TestDeploymentApplyRejectsInvalidInput(t *testing.T) {
 	}
 }
 
-func TestDeploymentLegacyStateAddsNullWriteOnlyAttribute(t *testing.T) {
+func TestHomelabConfigLegacyStateAddsNullWriteOnlyAttribute(t *testing.T) {
 	server, typ, _ := protocolConfig(t)
 	response, err := server.UpgradeResourceState(t.Context(), &tfprotov6.UpgradeResourceStateRequest{
-		TypeName: "homelab-helpers_deployment",
+		TypeName: "homelab_config",
 		Version:  0,
 		RawState: &tfprotov6.RawState{JSON: []byte(`{
 		 "id": "existing", "revision": "existing-revision",
