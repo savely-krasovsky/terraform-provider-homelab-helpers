@@ -10,6 +10,6 @@ ENHANCEMENTS:
 
 - Use the local provider name `homelab`.
 - Update to Go 1.27 and align project tooling with HashiCorp scaffolding ae0e7c8.
-- Build Linux and macOS amd64/arm64 releases in one GoReleaser job without CGO.
+- Build Windows, Linux and macOS amd64/arm64 releases in one GoReleaser job without CGO.
 - Use isolated function-test fixtures and add deployment protocol/engine tests.
 - Check Terraform 1.13/1.14 and OpenTofu in the template's test workflow.

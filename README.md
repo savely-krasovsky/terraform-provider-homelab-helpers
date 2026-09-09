@@ -3,7 +3,7 @@
 Utilities and a declarative deployment resource for my Fedora CoreOS homelab.
 Uses Terraform Plugin Framework and plugin protocol v6. The project follows the
 [HashiCorp scaffolding baseline](https://github.com/hashicorp/terraform-provider-scaffolding-framework/tree/ae0e7c85859bf23055354246bb9b75f5686d8558), with
-pure Go builds for Linux and macOS.
+pure Go builds for Windows, Linux and macOS.
 
 - `dirset(path, pattern)` lists directories matching a doublestar glob.
 - `dirhash(path, pattern)` hashes matching file names and contents using the
@@ -108,7 +108,7 @@ ignored `.terraformrc`. See the
 
 ## Releases
 
-A `v*` tag runs one GoReleaser job on Ubuntu. Go cross-compiles Linux and macOS
+A `v*` tag runs one GoReleaser job on Ubuntu. Go cross-compiles Windows, Linux and macOS
 amd64/arm64 binaries with CGO disabled. GoReleaser creates the registry ZIPs,
 manifest, SHA-256 checksums, GPG signature and GitHub release, following the
 scaffolding configuration. Release tooling uses GoReleaser 2.18.1.
