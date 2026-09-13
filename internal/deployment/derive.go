@@ -53,7 +53,10 @@ func Derive(files map[string]string) ([]string, map[string]Group, error) {
 			generated = append(generated, strings.TrimSuffix(name, ".network")+"-network.service")
 		case strings.HasSuffix(file, ".volume"):
 			generated = append(generated, strings.TrimSuffix(name, ".volume")+"-volume.service")
-		case strings.HasPrefix(file, nativeDir) && strings.HasSuffix(file, ".service"):
+		// Sockets belong here too: a socket-activated service revives itself unless its
+		// sockets are torn down in the same job set.
+		case strings.HasPrefix(file, nativeDir) &&
+			(strings.HasSuffix(file, ".service") || strings.HasSuffix(file, ".socket")):
 			native = append(native, name)
 		}
 
