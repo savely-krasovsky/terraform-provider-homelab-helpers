@@ -50,9 +50,11 @@ func TestAccHomelabConfigPlan(t *testing.T) {
 
     resource "homelab_config" "test" {
      host = "192.0.2.10"
-     files = {}
-     units = []
-     groups = {}
+     files = {
+      "containers/systemd/app.pod"          = "[Pod]\n"
+      "containers/systemd/app-web.container" = "[Container]\nPod=app.pod\n"
+      "containers/systemd/edge.network"      = "[Network]\n"
+     }
      firewall = "table inet filter {}"
      secrets = { app_password = "test-reference" }
      secret_values_wo = { app_password = var.password }
