@@ -5,6 +5,7 @@ package provider
 
 import (
 	"maps"
+	"slices"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
@@ -29,10 +30,10 @@ func protocolConfig(t *testing.T) (tfprotov6.ProviderServer, tftypes.Object, map
 	for name, value := range map[string]string{"host": "example.test", "firewall": "table inet filter {}"} {
 		values[name] = tftypes.NewValue(tftypes.String, value)
 	}
-	for _, name := range []string{"files", "groups", "secrets"} {
+	// units and groups are computed from files, so they stay absent from configuration.
+	for _, name := range []string{"files", "secrets"} {
 		values[name] = tftypes.NewValue(resourceType.AttributeTypes[name], map[string]tftypes.Value{})
 	}
-	values["units"] = tftypes.NewValue(resourceType.AttributeTypes["units"], []tftypes.Value{})
 
 	return server, resourceType, values
 }
@@ -340,4 +341,60 @@ func TestHomelabConfigLegacyStateAddsNullWriteOnlyAttribute(t *testing.T) {
 	require.Equal(t, tftypes.NewValue(typ.AttributeTypes["secrets"], map[string]tftypes.Value{
 		"app_password": tftypes.NewValue(tftypes.String, "existing-reference"),
 	}), values["secrets"])
+}
+
+func TestHomelabConfigProtocolDerivesUnitsAndGroups(t *testing.T) {
+	server, typ, config := protocolConfig(t)
+	config["files"] = tftypes.NewValue(typ.AttributeTypes["files"], map[string]tftypes.Value{
+		"containers/systemd/app.pod":           tftypes.NewValue(tftypes.String, "[Pod]\n"),
+		"containers/systemd/app-web.container": tftypes.NewValue(tftypes.String, "[Container]\nPod=app.pod\n"),
+		"containers/systemd/app-db.container":  tftypes.NewValue(tftypes.String, "[Container]\nPod=app.pod\n"),
+		"containers/systemd/edge.network":      tftypes.NewValue(tftypes.String, "[Network]\n"),
+	})
+
+	response, err := server.PlanResourceChange(t.Context(), &tfprotov6.PlanResourceChangeRequest{
+		TypeName:         "homelab_config",
+		PriorState:       dynamic(t, typ, nil),
+		ProposedNewState: dynamic(t, typ, config),
+		Config:           dynamic(t, typ, config),
+	})
+	require.NoError(t, err)
+	require.Empty(t, response.Diagnostics)
+
+	planned, err := response.PlannedState.Unmarshal(typ)
+	require.NoError(t, err)
+	var values map[string]tftypes.Value
+	require.NoError(t, planned.As(&values))
+
+	var groups map[string]tftypes.Value
+	require.NoError(t, values["groups"].As(&groups))
+	require.Equal(t, []string{"app-pod.service"}, slices.Sorted(maps.Keys(groups)))
+
+	var units []tftypes.Value
+	require.NoError(t, values["units"].As(&units))
+	names := make([]string, 0, len(units))
+	for _, unit := range units {
+		var name string
+		require.NoError(t, unit.As(&name))
+		names = append(names, name)
+	}
+	require.ElementsMatch(t,
+		[]string{"app-pod.service", "app-web.service", "app-db.service", "edge-network.service"},
+		names,
+	)
+}
+
+func TestHomelabConfigRejectsUnresolvableTree(t *testing.T) {
+	server, typ, config := protocolConfig(t)
+	config["files"] = tftypes.NewValue(typ.AttributeTypes["files"], map[string]tftypes.Value{
+		"containers/systemd/app.container": tftypes.NewValue(tftypes.String, "[Container]\nPod=missing.pod\n"),
+	})
+
+	response, err := server.ValidateResourceConfig(t.Context(), &tfprotov6.ValidateResourceConfigRequest{
+		TypeName: "homelab_config",
+		Config:   dynamic(t, typ, config),
+	})
+	require.NoError(t, err)
+	require.Len(t, response.Diagnostics, 1)
+	require.Contains(t, response.Diagnostics[0].Detail, "undeclared pod")
 }

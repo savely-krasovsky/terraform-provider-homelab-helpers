@@ -50,6 +50,11 @@ func (r *homelabConfigResource) ValidateConfig(ctx context.Context, req resource
 		return
 	}
 
+	resp.Diagnostics.Append(model.derive(ctx)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	payload, diagnostics := model.payload(ctx)
 	resp.Diagnostics.Append(diagnostics...)
 	if resp.Diagnostics.HasError() {
@@ -80,9 +85,19 @@ func (r *homelabConfigResource) ModifyPlan(ctx context.Context, req resource.Mod
 		return
 	}
 
+	resp.Diagnostics.Append(model.derive(ctx)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	payload, diagnostics := model.payload(ctx)
 	resp.Diagnostics.Append(diagnostics...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := payload.Validate(); err != nil {
+		resp.Diagnostics.AddError("Invalid deployment", err.Error())
+
 		return
 	}
 

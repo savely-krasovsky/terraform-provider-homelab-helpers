@@ -16,15 +16,7 @@ resource "homelab_config" "fcos" {
     UNIT
   }
 
-  units = ["example.service"]
-  groups = {
-    example = {
-      units        = ["example.service"]
-      enable       = []
-      hash         = "1" # Prefer sha256() over every file affecting the group.
-      uses_secrets = false
-    }
-  }
+  # units and groups are derived from files, and exported for inspection.
 
   # Volume sources below this root are created; the root itself must exist.
   data_root = "/var/mnt/docker/app_data"

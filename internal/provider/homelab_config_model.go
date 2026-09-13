@@ -44,8 +44,17 @@ type groupModel struct {
 	UsesSecrets types.Bool   `tfsdk:"uses_secrets"`
 }
 
+var groupType = types.ObjectType{AttrTypes: map[string]attr.Type{
+	"units":        types.ListType{ElemType: types.StringType},
+	"enable":       types.ListType{ElemType: types.StringType},
+	"hash":         types.StringType,
+	"uses_secrets": types.BoolType,
+}}
+
+// known reports whether the configured input is settled. Units and groups are
+// derived from it, so they are deliberately not part of the check.
 func (m homelabConfigModel) known(ctx context.Context) bool {
-	for _, a := range []attr.Value{m.Files, m.Units, m.Groups, m.DataRoot, m.Firewall, m.Secrets, m.SecretsRevision} {
+	for _, a := range []attr.Value{m.Files, m.DataRoot, m.Firewall, m.Secrets, m.SecretsRevision} {
 		value, err := a.ToTerraformValue(ctx)
 		if err != nil || !value.IsFullyKnown() {
 			return false
@@ -53,6 +62,56 @@ func (m homelabConfigModel) known(ctx context.Context) bool {
 	}
 
 	return true
+}
+
+// derive fills the units and restart groups the deployment owns. Quadlet naming
+// and the set of files that reach a group are provider knowledge, so the caller
+// supplies only the rendered tree.
+func (m *homelabConfigModel) derive(ctx context.Context) diag.Diagnostics {
+	var (
+		files       map[string]string
+		diagnostics diag.Diagnostics
+	)
+
+	diagnostics.Append(m.Files.ElementsAs(ctx, &files, false)...)
+	if diagnostics.HasError() {
+		return diagnostics
+	}
+
+	units, groups, err := deployment.Derive(files)
+	if err != nil {
+		diagnostics.AddError("Invalid configuration tree", err.Error())
+
+		return diagnostics
+	}
+
+	models := make(map[string]groupModel, len(groups))
+	for name, group := range groups {
+		unitValues, unitDiagnostics := types.ListValueFrom(ctx, types.StringType, group.Units)
+		enableValues, enableDiagnostics := types.ListValueFrom(ctx, types.StringType, group.Enable)
+		diagnostics.Append(unitDiagnostics...)
+		diagnostics.Append(enableDiagnostics...)
+
+		models[name] = groupModel{
+			Units:       unitValues,
+			Enable:      enableValues,
+			Hash:        types.StringValue(group.Hash),
+			UsesSecrets: types.BoolValue(group.UsesSecrets),
+		}
+	}
+
+	unitValues, unitDiagnostics := types.ListValueFrom(ctx, types.StringType, units)
+	groupValues, groupDiagnostics := types.MapValueFrom(ctx, groupType, models)
+	diagnostics.Append(unitDiagnostics...)
+	diagnostics.Append(groupDiagnostics...)
+	if diagnostics.HasError() {
+		return diagnostics
+	}
+
+	m.Units = unitValues
+	m.Groups = groupValues
+
+	return diagnostics
 }
 
 func (m homelabConfigModel) payload(ctx context.Context) (deployment.Payload, diag.Diagnostics) {

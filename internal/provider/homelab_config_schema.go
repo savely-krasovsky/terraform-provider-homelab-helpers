@@ -91,29 +91,29 @@ func (r *homelabConfigResource) Schema(_ context.Context, _ resource.SchemaReque
 				MarkdownDescription: "Relative path to rendered content under home_dir/.config. Do not include plaintext secrets: configuration values are persisted in state.",
 			},
 			"units": schema.ListAttribute{
-				Required:            true,
+				Computed:            true,
 				ElementType:         types.StringType,
-				MarkdownDescription: "Owned systemd user services, timers and sockets. Generated Quadlet units must be listed by generated unit name.",
+				MarkdownDescription: "Owned systemd user services, timers and sockets, derived from files. Quadlets appear under their generated unit name.",
 			},
 			"groups": schema.MapNestedAttribute{
-				Required:            true,
-				MarkdownDescription: "Restart groups. Put a pod and every member in the same group; hash must cover definitions and mounted configuration.",
+				Computed:            true,
+				MarkdownDescription: "Restart groups derived from files. A pod and all of its containers form one group, because they share namespaces and have to restart together. A group's hash covers its own unit definitions, the networks, volumes and engine configuration shared by every group, and the configuration it bind mounts from the user configuration directory.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"units": schema.ListAttribute{
-							Required: true, ElementType: types.StringType,
+							Computed: true, ElementType: types.StringType,
 							MarkdownDescription: "Units restarted together in one systemd transaction.",
 						},
 						"enable": schema.ListAttribute{
-							Required: true, ElementType: types.StringType,
-							MarkdownDescription: "Native units to enable (normally timers). Do not enable generated Quadlets.",
+							Computed: true, ElementType: types.StringType,
+							MarkdownDescription: "Native units to enable, which are the timers. Generated Quadlets are never enabled.",
 						},
 						"hash": schema.StringAttribute{
-							Required:            true,
+							Computed:            true,
 							MarkdownDescription: "Fingerprint of all configuration affecting the group.",
 						},
 						"uses_secrets": schema.BoolAttribute{
-							Required:            true,
+							Computed:            true,
 							MarkdownDescription: "Restart this group after importing changed secret references or a new secrets_revision.",
 						},
 					},

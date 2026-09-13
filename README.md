@@ -25,8 +25,16 @@ The resource stages the complete configuration on the host and checks it with
 that host's Quadlet generator and `nft --check`. Before changing live files or
 secrets it records ownership in a pending journal. It then installs changed
 secrets supplied by the caller, atomically replaces files, reloads the systemd
-user manager and restarts affected groups in one transaction. Put a pod and all its containers
-in the same group. Include mounted configuration in the group's `hash`.
+user manager and restarts affected groups in one transaction.
+
+Restart groups are derived from `files`, not configured. A pod and all of its
+containers form one group, because they share namespaces and have to restart
+together. A group's fingerprint covers its own unit definitions, the networks,
+volumes and engine configuration every group shares, and the configuration it
+bind mounts from the user configuration directory, so editing a mounted file
+restarts exactly the groups that read it. Timers are grouped with the service
+they start. The derived `units` and `groups` are exported for inspection and
+show up in the plan.
 
 Refresh reads actual configuration and firewall fingerprints, checks native unit
 enablement, the journal and secret existence. Drift produces an update in the

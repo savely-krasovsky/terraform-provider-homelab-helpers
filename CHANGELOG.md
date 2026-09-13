@@ -1,3 +1,16 @@
+## 0.3.0 (Unreleased)
+
+BREAKING CHANGES:
+
+- `homelab_config` derives `units` and `groups` from `files`; both are now
+  computed and must be removed from configuration. The provider reproduces the
+  Quadlet generator's unit naming, groups a pod with its containers, and
+  fingerprints each group over its unit definitions, the shared networks,
+  volumes and engine configuration, and the configuration it bind mounts from
+  the user configuration directory. Fingerprints are byte-compatible with
+  `sha256(jsonencode(...))`, so hosts keep their recorded groups and nothing
+  restarts on the upgrade.
+
 ## 0.1.0 (Unreleased)
 
 FEATURES:

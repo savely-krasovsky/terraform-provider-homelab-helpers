@@ -31,15 +31,7 @@ resource "homelab_config" "fcos" {
     UNIT
   }
 
-  units = ["example.service"]
-  groups = {
-    example = {
-      units        = ["example.service"]
-      enable       = []
-      hash         = "1" # Prefer sha256() over every file affecting the group.
-      uses_secrets = false
-    }
-  }
+  # units and groups are derived from files, and exported for inspection.
 
   # Volume sources below this root are created; the root itself must exist.
   data_root = "/var/mnt/docker/app_data"
@@ -60,10 +52,8 @@ resource "homelab_config" "fcos" {
 
 - `files` (Map of String) Relative path to rendered content under home_dir/.config. Do not include plaintext secrets: configuration values are persisted in state.
 - `firewall` (String) Complete nftables ruleset, checked before any live change and applied atomically by nft.
-- `groups` (Attributes Map) Restart groups. Put a pod and every member in the same group; hash must cover definitions and mounted configuration. (see [below for nested schema](#nestedatt--groups))
 - `host` (String) SSH hostname or IP address. SSH config files are not evaluated.
 - `secrets` (Map of String) Secret name to non-secret source reference or version. These values are stored in state and changes trigger reinstallation. The provider does not resolve references; pass the corresponding values in secret_values_wo. restic_* names become system credentials; other names become Podman secrets with underscores replaced by hyphens.
-- `units` (List of String) Owned systemd user services, timers and sockets. Generated Quadlet units must be listed by generated unit name.
 
 ### Optional
 
@@ -83,15 +73,17 @@ resource "homelab_config" "fcos" {
 
 ### Read-Only
 
+- `groups` (Attributes Map) Restart groups derived from files. A pod and all of its containers form one group, because they share namespaces and have to restart together. A group's hash covers its own unit definitions, the networks, volumes and engine configuration shared by every group, and the configuration it bind mounts from the user configuration directory. (see [below for nested schema](#nestedatt--groups))
 - `id` (String) Stable deployment identity derived from host, port, user and home directory.
 - `revision` (String) Desired configuration fingerprint. Refresh marks drift here when managed files, enabled timers, secrets or the journal differ.
+- `units` (List of String) Owned systemd user services, timers and sockets, derived from files. Quadlets appear under their generated unit name.
 
 <a id="nestedatt--groups"></a>
 ### Nested Schema for `groups`
 
-Required:
+Read-Only:
 
-- `enable` (List of String) Native units to enable (normally timers). Do not enable generated Quadlets.
+- `enable` (List of String) Native units to enable, which are the timers. Generated Quadlets are never enabled.
 - `hash` (String) Fingerprint of all configuration affecting the group.
 - `units` (List of String) Units restarted together in one systemd transaction.
 - `uses_secrets` (Boolean) Restart this group after importing changed secret references or a new secrets_revision.
