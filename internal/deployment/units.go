@@ -49,29 +49,49 @@ func (e Engine) applyUnits(ctx context.Context, groups, previous map[string]Grou
 }
 
 func (e Engine) removeUnits(ctx context.Context, units []string) error {
-	for _, unit := range units {
-		state, err := e.Host.Run(ctx, remote.Command{
-			Name: "systemctl",
-			Args: []string{"--user", "show", unit, "--property=LoadState", "--value"},
-		})
-		if err != nil {
-			return err
-		}
+	if len(units) == 0 {
+		return nil
+	}
 
-		if strings.TrimSpace(string(state)) == "not-found" {
+	states, err := e.Host.Run(ctx, remote.Command{
+		Name: "systemctl",
+		Args: slices.Concat([]string{"--user", "show", "--property=LoadState", "--value"}, units),
+	})
+	if err != nil {
+		return err
+	}
+
+	lines := strings.Fields(string(states))
+	var present, timers []string
+	for i, unit := range units {
+		if i < len(lines) && lines[i] == "not-found" {
 			continue
 		}
-
+		present = append(present, unit)
 		if strings.HasSuffix(unit, ".timer") {
-			if _, err := e.Host.Run(ctx, remote.Command{Name: "systemctl", Args: []string{"--user", "disable", unit}}); err != nil {
-				return err
-			}
+			timers = append(timers, unit)
 		}
+	}
 
-		if _, err := e.Host.Run(ctx, remote.Command{Name: "systemctl", Args: []string{"--user", "stop", unit}}); err != nil {
+	if len(timers) > 0 {
+		if _, err := e.Host.Run(ctx, remote.Command{
+			Name: "systemctl",
+			Args: slices.Concat([]string{"--user", "disable"}, timers),
+		}); err != nil {
 			return err
 		}
 	}
 
-	return nil
+	if len(present) == 0 {
+		return nil
+	}
+
+	// One job set lets systemd order the stops itself. Stopping unit by unit fights its
+	// dependency graph: a network refuses to go down while a container still holds it.
+	_, err = e.Host.Run(ctx, remote.Command{
+		Name: "systemctl",
+		Args: slices.Concat([]string{"--user", "stop"}, present),
+	})
+
+	return err
 }
