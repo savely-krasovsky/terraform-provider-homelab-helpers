@@ -26,6 +26,9 @@ resource "homelab_config" "fcos" {
     }
   }
 
+  # Volume sources below this root are created; the root itself must exist.
+  data_root = "/var/mnt/docker/app_data"
+
   firewall = file("${path.module}/firewall.nft")
   secrets  = {} # name => non-secret source reference or version.
 

@@ -6,10 +6,13 @@ package deployment
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"path"
 	"slices"
+	"strings"
 
 	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/remote"
 )
@@ -37,7 +40,8 @@ func (e Engine) Apply(ctx context.Context, payload Payload, values map[string]st
 	}
 	defer func() { _ = e.Host.RemoveStage(stage) }()
 
-	if err := e.stage(ctx, stage, payload); err != nil {
+	sources, err := e.stage(ctx, stage, payload)
+	if err != nil {
 		return fmt.Errorf("validate deployment: %w", err)
 	}
 
@@ -84,6 +88,10 @@ func (e Engine) Apply(ctx context.Context, payload Payload, values map[string]st
 		return fmt.Errorf("apply firewall (journal retained for retry): %w", err)
 	}
 
+	if err := e.ensureData(payload.DataRoot, sources); err != nil {
+		return fmt.Errorf("create data directories (journal retained for retry): %w", err)
+	}
+
 	if err := e.applyUnits(ctx, payload.Groups, old.Groups, interrupted || drift, refreshSecrets); err != nil {
 		return fmt.Errorf("apply units (journal retained for retry): %w", err)
 	}
@@ -103,6 +111,61 @@ func (e Engine) Apply(ctx context.Context, payload Payload, values map[string]st
 	}
 
 	return e.clearPending(ctx)
+}
+
+// ensureData creates the bind mount sources a container needs before its unit
+// starts: rootless Podman refuses to relabel a missing directory and fails with
+// a bare statfs error. Only sources below the configured root are created, so a
+// unit mounting a share keeps failing loudly instead of running against an empty
+// directory where the mount should be. The root itself is never created for the
+// same reason. Existing directories keep their mode and ownership, and nothing
+// here is ever removed: these hold application data, which outlives both the
+// unit and the deployment.
+func (e Engine) ensureData(root string, sources []string) error {
+	if root == "" {
+		return nil
+	}
+
+	dirs := slices.DeleteFunc(slices.Clone(sources), func(source string) bool {
+		return !strings.HasPrefix(source, root+"/")
+	})
+	if len(dirs) == 0 {
+		return nil
+	}
+
+	info, err := e.Host.Stat(root)
+	if err != nil {
+		return fmt.Errorf("inspect data root %s: %w", root, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("data root is not a directory: %s", root)
+	}
+
+	for _, dir := range dirs {
+		if err := e.Host.CheckPath(dir); err != nil {
+			return err
+		}
+
+		current := root
+		for part := range strings.SplitSeq(strings.TrimPrefix(dir, root+"/"), "/") {
+			current = path.Join(current, part)
+
+			switch info, err := e.Host.Stat(current); {
+			case err == nil && info.IsDir():
+				continue
+			case err == nil:
+				return fmt.Errorf("data path is not a directory: %s", current)
+			case !errors.Is(err, fs.ErrNotExist):
+				return fmt.Errorf("inspect data directory %s: %w", current, err)
+			}
+
+			if err := e.Host.Mkdir(current, 0755); err != nil {
+				return fmt.Errorf("create data directory %s: %w", current, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (e Engine) readOwnership(current Ownership) (manifest, Ownership, bool, error) {

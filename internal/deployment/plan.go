@@ -26,6 +26,7 @@ type Payload struct {
 	Groups          map[string]Group  `json:"groups"`
 	Firewall        string            `json:"firewall"`
 	SecretsRevision string            `json:"secrets_revision"`
+	DataRoot        string            `json:"data_root,omitempty"`
 }
 
 // Ownership keeps the Bash manifest/journal format so existing hosts can migrate in place.
@@ -96,6 +97,14 @@ func (p Payload) Validate() error {
 				return fmt.Errorf("group %q refers to unmanaged unit %q", name, unit)
 			}
 		}
+	}
+
+	return p.validateData()
+}
+
+func (p Payload) validateData() error {
+	if p.DataRoot != "" && (!hostPath(p.DataRoot) || p.DataRoot == "/") {
+		return fmt.Errorf("expected a clean absolute data root: %q", p.DataRoot)
 	}
 
 	return nil

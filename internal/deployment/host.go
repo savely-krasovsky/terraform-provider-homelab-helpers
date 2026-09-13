@@ -39,12 +39,16 @@ func (p Paths) State() string  { return path.Join(p.Home, ".local/state/homelab"
 
 func (p Paths) Validate() error {
 	for _, name := range []string{p.Home, p.Firewall} {
-		if !path.IsAbs(name) || path.Clean(name) != name || name == "/" || strings.ContainsAny(name, "\x00\r\n") {
+		if !hostPath(name) || name == "/" {
 			return fmt.Errorf("expected a clean absolute host path: %q", name)
 		}
 	}
 
 	return nil
+}
+
+func hostPath(name string) bool {
+	return path.IsAbs(name) && path.Clean(name) == name && !strings.ContainsAny(name, "\x00\r\n")
 }
 
 func Prepare(ctx context.Context, h Host, p Paths) error {

@@ -41,6 +41,9 @@ resource "homelab_config" "fcos" {
     }
   }
 
+  # Volume sources below this root are created; the root itself must exist.
+  data_root = "/var/mnt/docker/app_data"
+
   firewall = file("${path.module}/firewall.nft")
   secrets  = {} # name => non-secret source reference or version.
 
@@ -66,6 +69,7 @@ resource "homelab_config" "fcos" {
 
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
+- `data_root` (String) Absolute host path below which bind mount sources are created, such as /var/mnt/docker/app_data. Podman does not create the source of a volume it has to relabel, so every such source the generated units name below this root is created as a directory with mode 0755 before the units start; existing directories keep their mode and ownership and are never removed. Sources outside the root are left alone, and the root itself is never created: a share that failed to mount must fail the apply instead of being masked by empty directories. Keep single-file bind mounts out of this tree, they would be created as directories.
 - `firewall_path` (String) Persistent nftables file. Retained on destroy to preserve host connectivity and protection.
 - `home_dir` (String) Absolute remote home. Configuration is managed below .config and the journal below .local/state/homelab. Symlink components are rejected.
 - `host_key` (String) Pinned SSH public host key in authorized_keys format. Takes precedence over known_hosts_file.

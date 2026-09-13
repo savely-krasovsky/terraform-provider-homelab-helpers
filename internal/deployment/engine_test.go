@@ -34,9 +34,11 @@ type fakeHost struct {
 	failNft       bool
 	failNftApply  bool
 	failGenerator bool
+	volumes       []string
 	reads         map[string]int
 	uploads       []string
 	installed     []string
+	mkdirs        []string
 }
 
 func (h *fakeHost) CheckPath(name string) error {
@@ -75,7 +77,11 @@ func (h *fakeHost) ReadFile(name string) ([]byte, error) {
 	return os.ReadFile(name)
 }
 
-func (h *fakeHost) Mkdir(name string, mode fs.FileMode) error { return os.MkdirAll(name, mode) }
+func (h *fakeHost) Mkdir(name string, mode fs.FileMode) error {
+	h.mkdirs = append(h.mkdirs, name)
+
+	return os.MkdirAll(name, mode)
+}
 
 func (h *fakeHost) WriteFile(ctx context.Context, name string, data []byte, mode fs.FileMode) error {
 	if err := ctx.Err(); err != nil {
@@ -144,7 +150,15 @@ func (h *fakeHost) Run(ctx context.Context, command remote.Command) ([]byte, err
 			return nil, errors.New("invalid Quadlet")
 		}
 		for _, unit := range []string{"app.service", "other.service", "pod-pod.service"} {
-			if err := os.WriteFile(path.Join(args[len(args)-1], unit), nil, 0644); err != nil {
+			generated := "[Service]\nExecStart=/usr/bin/podman run --name app"
+			if unit == "app.service" {
+				for _, volume := range h.volumes {
+					generated += " -v " + volume
+				}
+			}
+			generated += " image\nExecStopPost=/usr/bin/podman rm -v -f -i app\n"
+
+			if err := os.WriteFile(path.Join(args[len(args)-1], unit), []byte(generated), 0644); err != nil {
 				return nil, err
 			}
 		}
@@ -402,6 +416,124 @@ func TestFirewallApplyFailurePreservesConfiguration(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, payload.Firewall, string(content))
 	require.NoFileExists(t, path.Join(engine.Paths.State(), "config-pending.json"))
+}
+
+func TestDataDirectoriesFollowGeneratedUnits(t *testing.T) {
+	engine, host, values, payload := fixtureEngine(t)
+
+	// An unused data root must stay out of the fingerprint, so that deployments
+	// predating the feature do not report drift.
+	require.NotContains(t, string(mustJSON(t, payload)), "data_")
+
+	payload.DataRoot = path.Join(host.root, "data")
+	existing := path.Join(payload.DataRoot, "app/postgres")
+	require.NoError(t, os.MkdirAll(existing, 0700))
+
+	outside := path.Join(host.root, "media")
+	host.volumes = []string{
+		existing + ":/var/lib/postgresql:Z",
+		path.Join(payload.DataRoot, "app/valkey") + ":/data:Z",
+		path.Join(payload.DataRoot, "fresh/deep/data") + ":/data",
+		outside + ":/media:ro",
+		"named-volume:/assets",
+	}
+
+	host.mkdirs = nil
+	require.NoError(t, engine.Apply(t.Context(), payload, values))
+	require.Equal(t, []string{
+		path.Join(payload.DataRoot, "app/valkey"),
+		path.Join(payload.DataRoot, "fresh"),
+		path.Join(payload.DataRoot, "fresh/deep"),
+		path.Join(payload.DataRoot, "fresh/deep/data"),
+	}, created(host, payload.DataRoot))
+
+	// A mount below the root is data; anything else belongs to whatever provides
+	// it, and creating it would mask a share that failed to mount.
+	require.NoDirExists(t, outside)
+
+	// An existing directory keeps the mode the application gave it.
+	info, err := os.Stat(existing)
+	require.NoError(t, err)
+	require.Equal(t, fs.FileMode(0700), info.Mode().Perm())
+
+	// Dropping a volume must never remove the data behind it.
+	dropped := path.Join(payload.DataRoot, "app/valkey")
+	host.volumes = host.volumes[:1]
+	host.mkdirs = nil
+	require.NoError(t, engine.Apply(t.Context(), payload, values))
+	require.Empty(t, created(host, payload.DataRoot))
+	require.DirExists(t, dropped)
+}
+
+func TestDataRootIsNeverCreated(t *testing.T) {
+	engine, host, values, payload := fixtureEngine(t)
+	payload.DataRoot = path.Join(host.root, "unmounted")
+	host.volumes = []string{path.Join(payload.DataRoot, "app/valkey") + ":/data:Z"}
+
+	// A data root is a mount point in practice: creating it would hide a
+	// filesystem that failed to mount behind fresh empty directories.
+	require.ErrorIs(t, engine.Apply(t.Context(), payload, values), fs.ErrNotExist)
+	require.NoDirExists(t, payload.DataRoot)
+	require.Empty(t, host.restarts())
+	require.FileExists(t, path.Join(engine.Paths.State(), "config-pending.json"))
+}
+
+func TestMountSourcesFromPodmanArguments(t *testing.T) {
+	unit := strings.Join([]string{
+		"ExecStart=/usr/bin/podman run --name app",
+		"-v /srv/data/app:/data:Z",
+		"--volume=/srv/data/other:/other",
+		`--volume "/srv/data/quoted:/quoted"`,
+		"--mount type=bind,source=/srv/data/mounted,destination=/mounted",
+		"--mount type=bind,src=/srv/data/short,dst=/short",
+		"-v named-volume:/assets",
+		"-v %E/app/settings.conf:/etc/app.conf",
+		"--label source=inline",
+		"\nExecStopPost=/usr/bin/podman rm -v -f -i app",
+	}, " ")
+
+	// Named volumes, unexpanded specifiers and the -v of podman rm are not
+	// absolute paths, so they never reach the filesystem.
+	require.Equal(t, []string{
+		"/srv/data/app",
+		"/srv/data/other",
+		"/srv/data/quoted",
+		"/srv/data/mounted",
+		"/srv/data/short",
+	}, mountSources(unit))
+}
+
+func TestDataRootValidation(t *testing.T) {
+	for name, root := range map[string]string{
+		"relative": "srv/data",
+		"unclean":  "/srv/data/",
+		"root":     "/",
+		"newline":  "/srv/data\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, _, _, payload := fixtureEngine(t)
+			payload.DataRoot = root
+			require.Error(t, payload.Validate())
+		})
+	}
+
+	_, _, _, payload := fixtureEngine(t)
+	payload.DataRoot = "/srv/data"
+	require.NoError(t, payload.Validate())
+}
+
+func created(host *fakeHost, root string) []string {
+	return slices.DeleteFunc(slices.Clone(host.mkdirs), func(dir string) bool {
+		return !strings.HasPrefix(dir, root+"/")
+	})
+}
+
+func mustJSON(t *testing.T, value any) []byte {
+	t.Helper()
+	data, err := json.Marshal(value)
+	require.NoError(t, err)
+
+	return data
 }
 
 func TestDeletePreservesUnmanagedData(t *testing.T) {

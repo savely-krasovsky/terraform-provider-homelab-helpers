@@ -30,6 +30,7 @@ type homelabConfigModel struct {
 	Files           types.Map    `tfsdk:"files"`
 	Units           types.List   `tfsdk:"units"`
 	Groups          types.Map    `tfsdk:"groups"`
+	DataRoot        types.String `tfsdk:"data_root"`
 	Firewall        types.String `tfsdk:"firewall"`
 	Secrets         types.Map    `tfsdk:"secrets"`
 	SecretValuesWO  types.Map    `tfsdk:"secret_values_wo"`
@@ -44,7 +45,7 @@ type groupModel struct {
 }
 
 func (m homelabConfigModel) known(ctx context.Context) bool {
-	for _, a := range []attr.Value{m.Files, m.Units, m.Groups, m.Firewall, m.Secrets, m.SecretsRevision} {
+	for _, a := range []attr.Value{m.Files, m.Units, m.Groups, m.DataRoot, m.Firewall, m.Secrets, m.SecretsRevision} {
 		value, err := a.ToTerraformValue(ctx)
 		if err != nil || !value.IsFullyKnown() {
 			return false
@@ -67,6 +68,7 @@ func (m homelabConfigModel) payload(ctx context.Context) (deployment.Payload, di
 	diagnostics.Append(m.Groups.ElementsAs(ctx, &groups, false)...)
 	payload.Groups = make(map[string]deployment.Group, len(groups))
 	payload.Firewall = m.Firewall.ValueString()
+	payload.DataRoot = m.DataRoot.ValueString()
 
 	for name, group := range groups {
 		value := deployment.Group{

@@ -119,6 +119,13 @@ func (r *homelabConfigResource) Schema(_ context.Context, _ resource.SchemaReque
 					},
 				},
 			},
+			"data_root": schema.StringAttribute{
+				Optional:            true,
+				MarkdownDescription: "Absolute host path below which bind mount sources are created, such as /var/mnt/docker/app_data. Podman does not create the source of a volume it has to relabel, so every such source the generated units name below this root is created as a directory with mode 0755 before the units start; existing directories keep their mode and ownership and are never removed. Sources outside the root are left alone, and the root itself is never created: a share that failed to mount must fail the apply instead of being masked by empty directories. Keep single-file bind mounts out of this tree, they would be created as directories.",
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+				},
+			},
 			"firewall": schema.StringAttribute{
 				Required:            true,
 				MarkdownDescription: "Complete nftables ruleset, checked before any live change and applied atomically by nft.",
