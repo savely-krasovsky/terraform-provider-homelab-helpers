@@ -45,6 +45,11 @@ For SSH access, see [provider configuration](docs/index.md). The target needs
 SFTP with POSIX rename, `flock`, `install` and `sync`; secret resources need the
 Podman API socket.
 
+SSH verifies server keys by default. Explicitly set
+`insecure_skip_host_key_check = true` to accept unknown and changed host keys.
+This keeps SSH encryption and client authentication but permits server
+impersonation. Omit `host_key` and `known_hosts_file` when enabling this option.
+
 ## Deployment behavior
 
 Use separate deployments for applications that should restart independently.

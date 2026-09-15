@@ -31,16 +31,17 @@ type deploymentProvider struct {
 }
 
 type providerModel struct {
-	Transport      types.String `tfsdk:"transport"`
-	PodmanSocket   types.String `tfsdk:"podman_socket"`
-	SystemdBus     types.String `tfsdk:"systemd_bus"`
-	Host           types.String `tfsdk:"host"`
-	Port           types.Int64  `tfsdk:"port"`
-	User           types.String `tfsdk:"user"`
-	PrivateKeyFile types.String `tfsdk:"private_key_file"`
-	KnownHostsFile types.String `tfsdk:"known_hosts_file"`
-	HostKey        types.String `tfsdk:"host_key"`
-	Timeout        types.String `tfsdk:"timeout"`
+	Transport                types.String `tfsdk:"transport"`
+	PodmanSocket             types.String `tfsdk:"podman_socket"`
+	SystemdBus               types.String `tfsdk:"systemd_bus"`
+	Host                     types.String `tfsdk:"host"`
+	Port                     types.Int64  `tfsdk:"port"`
+	User                     types.String `tfsdk:"user"`
+	PrivateKeyFile           types.String `tfsdk:"private_key_file"`
+	KnownHostsFile           types.String `tfsdk:"known_hosts_file"`
+	HostKey                  types.String `tfsdk:"host_key"`
+	InsecureSkipHostKeyCheck types.Bool   `tfsdk:"insecure_skip_host_key_check"`
+	Timeout                  types.String `tfsdk:"timeout"`
 }
 
 func (p *deploymentProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -79,6 +80,10 @@ func (p *deploymentProvider) Schema(_ context.Context, _ provider.SchemaRequest,
 				Optional:            true,
 				MarkdownDescription: "Pinned public host key in authorized_keys format; takes precedence over known_hosts_file.",
 			},
+			"insecure_skip_host_key_check": schema.BoolAttribute{
+				Optional:            true,
+				MarkdownDescription: "Disable SSH host key verification. Defaults to false. Accepts unknown and changed server keys, leaving the connection vulnerable to server impersonation. Cannot be combined with host_key or known_hosts_file.",
+			},
 			"timeout": schema.StringAttribute{
 				Optional:            true,
 				MarkdownDescription: "Per-operation timeout as a Go duration, including connection retries. Defaults to 15m.",
@@ -99,6 +104,7 @@ func (p *deploymentProvider) Configure(ctx context.Context, req provider.Configu
 		"transport": model.Transport, "podman_socket": model.PodmanSocket, "systemd_bus": model.SystemdBus,
 		"host": model.Host, "port": model.Port, "user": model.User, "private_key_file": model.PrivateKeyFile,
 		"known_hosts_file": model.KnownHostsFile, "host_key": model.HostKey, "timeout": model.Timeout,
+		"insecure_skip_host_key_check": model.InsecureSkipHostKeyCheck,
 	} {
 		if value.IsUnknown() {
 			resp.Diagnostics.AddAttributeError(path.Root(name), "Unknown provider configuration", "the value must be known before the host can be reached")
@@ -118,6 +124,7 @@ func (p *deploymentProvider) Configure(ctx context.Context, req provider.Configu
 		Host: model.Host.ValueString(), Port: 22, User: model.User.ValueString(),
 		PrivateKeyFile: model.PrivateKeyFile.ValueString(),
 		KnownHostsFile: "~/.ssh/known_hosts", HostKey: model.HostKey.ValueString(),
+		InsecureSkipHostKeyCheck: model.InsecureSkipHostKeyCheck.ValueBool(),
 	}
 	if !model.Port.IsNull() {
 		config.Port = int(model.Port.ValueInt64())
@@ -137,6 +144,10 @@ func (p *deploymentProvider) Configure(ctx context.Context, req provider.Configu
 
 	switch transport {
 	case "ssh":
+		if config.InsecureSkipHostKeyCheck && (!model.HostKey.IsNull() || !model.KnownHostsFile.IsNull()) {
+			resp.Diagnostics.AddAttributeError(path.Root("insecure_skip_host_key_check"), "Conflicting host key configuration", "omit host_key and known_hosts_file when disabling host key verification")
+		}
+
 		if strings.TrimSpace(config.Host) == "" {
 			resp.Diagnostics.AddAttributeError(path.Root("host"), "Invalid host", "host must not be blank with ssh transport")
 		}
@@ -159,6 +170,7 @@ func (p *deploymentProvider) Configure(ctx context.Context, req provider.Configu
 		for name, value := range map[string]interface{ IsNull() bool }{
 			"host": model.Host, "port": model.Port, "user": model.User, "private_key_file": model.PrivateKeyFile,
 			"known_hosts_file": model.KnownHostsFile, "host_key": model.HostKey,
+			"insecure_skip_host_key_check": model.InsecureSkipHostKeyCheck,
 		} {
 			if !value.IsNull() {
 				resp.Diagnostics.AddAttributeError(path.Root(name), "SSH argument with local transport", "omit SSH arguments when transport is local")

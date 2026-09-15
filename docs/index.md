@@ -42,6 +42,7 @@ provider "quadlet" {
 
 - `host` (String) SSH hostname or IP address. Required with ssh transport. SSH configuration files are not evaluated.
 - `host_key` (String) Pinned public host key in authorized_keys format; takes precedence over known_hosts_file.
+- `insecure_skip_host_key_check` (Boolean) Disable SSH host key verification. Defaults to false. Accepts unknown and changed server keys, leaving the connection vulnerable to server impersonation. Cannot be combined with host_key or known_hosts_file.
 - `known_hosts_file` (String) Defaults to ~/.ssh/known_hosts. Unknown or changed keys are rejected.
 - `podman_socket` (String) Absolute Podman API socket path on the target. Defaults to /run/user/<uid>/podman/podman.sock. Used only for Podman secrets.
 - `port` (Number) SSH port. Defaults to 22.

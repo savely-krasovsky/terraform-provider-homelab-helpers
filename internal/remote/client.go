@@ -24,12 +24,13 @@ import (
 )
 
 type Config struct {
-	Host           string
-	Port           int
-	User           string
-	PrivateKeyFile string
-	KnownHostsFile string
-	HostKey        string
+	Host                     string
+	Port                     int
+	User                     string
+	PrivateKeyFile           string
+	KnownHostsFile           string
+	HostKey                  string
+	InsecureSkipHostKeyCheck bool
 }
 
 type Client struct {
@@ -150,6 +151,10 @@ func (c *Client) DialContext(ctx context.Context, network, address string) (net.
 }
 
 func hostVerifier(config Config, address string) (ssh.HostKeyCallback, []string, error) {
+	if config.InsecureSkipHostKeyCheck {
+		return ssh.InsecureIgnoreHostKey(), nil, nil
+	}
+
 	if config.HostKey != "" {
 		key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(config.HostKey))
 		if err != nil {

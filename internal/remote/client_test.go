@@ -177,6 +177,52 @@ func TestUntrustedHostIsRejected(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestPinnedHostKeyIgnoresStaleKnownHosts(t *testing.T) {
+	config := testServer(t)
+	other := testServer(t)
+	config.KnownHostsFile = filepath.Join(t.TempDir(), "known_hosts")
+	address := "[" + config.Host + "]:" + strconv.Itoa(config.Port)
+	require.NoError(t, os.WriteFile(config.KnownHostsFile, []byte(address+" "+other.HostKey+"\n"), 0600))
+
+	client, err := Connect(t.Context(), config)
+	require.NoError(t, err)
+	client.Close()
+
+	config.HostKey = other.HostKey
+	_, err = Connect(t.Context(), config)
+	require.ErrorContains(t, err, "host key mismatch")
+}
+
+func TestInsecureHostVerificationStillRequiresAuthentication(t *testing.T) {
+	config := testServer(t)
+	other := testServer(t)
+	config.HostKey = ""
+	config.KnownHostsFile = filepath.Join(t.TempDir(), "known_hosts")
+	config.InsecureSkipHostKeyCheck = true
+
+	// No known_hosts file is needed for the first connection.
+	client, err := Connect(t.Context(), config)
+	require.NoError(t, err)
+	client.Close()
+
+	// A stale key is also ignored after reinstalling the server.
+	address := "[" + config.Host + "]:" + strconv.Itoa(config.Port)
+	require.NoError(t, os.WriteFile(config.KnownHostsFile, []byte(address+" "+other.HostKey+"\n"), 0600))
+
+	client, err = Connect(t.Context(), config)
+	require.NoError(t, err)
+	client.Close()
+
+	config.InsecureSkipHostKeyCheck = false
+	_, err = Connect(t.Context(), config)
+	require.ErrorContains(t, err, "key mismatch")
+
+	config.InsecureSkipHostKeyCheck = true
+	config.PrivateKeyFile = other.PrivateKeyFile
+	_, err = Connect(t.Context(), config)
+	require.ErrorContains(t, err, "unable to authenticate")
+}
+
 func TestCommandsDoNotRequireSFTP(t *testing.T) {
 	client, err := Connect(t.Context(), startTestServer(t, false))
 	require.NoError(t, err)

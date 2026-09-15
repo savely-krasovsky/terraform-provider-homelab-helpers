@@ -69,17 +69,21 @@ func TestProviderSchema(t *testing.T) {
 
 func TestProviderConfigureValidation(t *testing.T) {
 	for name, values := range map[string]map[string]any{
-		"blank host":          {"host": " "},
-		"missing ssh host":    {"user": "deploy"},
-		"missing ssh user":    {"host": "example.test"},
-		"blank ssh user":      {"host": "example.test", "user": " "},
-		"invalid transport":   {"transport": "http"},
-		"local with ssh host": {"transport": "local", "host": "example.test"},
-		"local with ssh user": {"transport": "local", "user": "core"},
-		"invalid socket":      {"host": "example.test", "podman_socket": "relative"},
-		"invalid bus":         {"host": "example.test", "systemd_bus": "/run/../bus"},
-		"bad port":            {"host": "example.test", "port": 70000},
-		"bad timeout":         {"host": "example.test", "timeout": "soon"},
+		"blank host":                         {"host": " "},
+		"missing ssh host":                   {"user": "deploy"},
+		"missing ssh user":                   {"host": "example.test"},
+		"blank ssh user":                     {"host": "example.test", "user": " "},
+		"invalid transport":                  {"transport": "http"},
+		"local with ssh host":                {"transport": "local", "host": "example.test"},
+		"local with ssh user":                {"transport": "local", "user": "core"},
+		"invalid socket":                     {"host": "example.test", "podman_socket": "relative"},
+		"invalid bus":                        {"host": "example.test", "systemd_bus": "/run/../bus"},
+		"bad port":                           {"host": "example.test", "port": 70000},
+		"bad timeout":                        {"host": "example.test", "timeout": "soon"},
+		"skip verification with pin":         {"host": "example.test", "user": "deploy", "insecure_skip_host_key_check": true, "host_key": "key"},
+		"skip verification with known hosts": {"host": "example.test", "user": "deploy", "insecure_skip_host_key_check": true, "known_hosts_file": "hosts"},
+		"unknown verification policy":        {"host": "example.test", "user": "deploy", "insecure_skip_host_key_check": tftypes.UnknownValue},
+		"local with verification policy":     {"transport": "local", "insecure_skip_host_key_check": false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			server, schema := server(t)
@@ -95,6 +99,18 @@ func TestProviderConfigureValidation(t *testing.T) {
 	response, err := server.ConfigureProvider(t.Context(), &tfprotov6.ConfigureProviderRequest{Config: config})
 	require.NoError(t, err)
 	require.Empty(t, response.Diagnostics)
+}
+
+func TestProviderInsecureHostKeyOption(t *testing.T) {
+	for _, skip := range []bool{false, true} {
+		server, schema := server(t)
+		_, config := object(t, schema.Provider, map[string]any{
+			"host": "example.test", "user": "deploy", "insecure_skip_host_key_check": skip,
+		})
+		response, err := server.ConfigureProvider(t.Context(), &tfprotov6.ConfigureProviderRequest{Config: config})
+		require.NoError(t, err)
+		require.Empty(t, response.Diagnostics)
+	}
 }
 
 func TestConfigValidationRejects(t *testing.T) {
