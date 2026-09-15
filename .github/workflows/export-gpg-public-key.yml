@@ -1,0 +1,31 @@
+name: Export GPG public key
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  export:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7.0.0
+        id: import_gpg
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+      - name: Export public key
+        env:
+          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+        run: |
+          test -n "$GPG_FINGERPRINT"
+          gpg --batch --armor --export "$GPG_FINGERPRINT" > "$RUNNER_TEMP/public-key.asc"
+          test -s "$RUNNER_TEMP/public-key.asc"
+      - name: Upload public key
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          path: ${{ runner.temp }}/public-key.asc
+          archive: false
+          if-no-files-found: error
+          retention-days: 1
