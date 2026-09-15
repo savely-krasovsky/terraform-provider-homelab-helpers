@@ -13,8 +13,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/host"
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/systemd"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/host"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/systemd"
 )
 
 const (

@@ -7,7 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/podman"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/podman"
 	"testing"
 
 	frameworkprovider "github.com/hashicorp/terraform-plugin-framework/provider"

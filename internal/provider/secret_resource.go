@@ -19,7 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/podman"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/podman"
 )
 
 var (

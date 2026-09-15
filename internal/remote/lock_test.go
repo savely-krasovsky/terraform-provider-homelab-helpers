@@ -11,8 +11,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/host"
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/local"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/host"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/local"
 )
 
 func TestHostLockSerializesIndependentConnections(t *testing.T) {

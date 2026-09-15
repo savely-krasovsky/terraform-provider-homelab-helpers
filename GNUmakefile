@@ -10,7 +10,7 @@ LDFLAGS = -X main.version=$(patsubst v%,%,$(VERSION))
 .PHONY: build install fmt lint test testacc vet generate check
 
 build:
-	$(GO) build -trimpath -ldflags '$(LDFLAGS)' -o $(BUILD_DIR)/terraform-provider-homelab-helpers .
+	$(GO) build -trimpath -ldflags '$(LDFLAGS)' -o $(BUILD_DIR)/terraform-provider-quadlet .
 
 install:
 	$(GO) install -trimpath -ldflags '$(LDFLAGS)' .

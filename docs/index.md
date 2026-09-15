@@ -15,7 +15,7 @@ Deploys Quadlets, native systemd user units and their configuration files over S
 terraform {
   required_providers {
     quadlet = {
-      source = "savely-krasovsky/homelab-helpers"
+      source = "savely-krasovsky/quadlet"
     }
   }
 }

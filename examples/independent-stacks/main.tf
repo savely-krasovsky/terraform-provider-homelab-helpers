@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     quadlet = {
-      source = "savely-krasovsky/homelab-helpers"
+      source = "savely-krasovsky/quadlet"
     }
   }
 }

@@ -13,7 +13,7 @@ import (
 
 	"al.essio.dev/pkg/shellescape"
 
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/host"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/host"
 )
 
 // Run executes the command through the remote login shell; secret values travel through stdin or SFTP.

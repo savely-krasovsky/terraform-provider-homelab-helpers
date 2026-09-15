@@ -11,7 +11,7 @@ import (
 	"path"
 	"testing"
 
-	hostio "github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/host"
+	hostio "github.com/savely-krasovsky/terraform-provider-quadlet/internal/host"
 	"github.com/stretchr/testify/require"
 )
 

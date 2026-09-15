@@ -11,13 +11,14 @@ locally on Linux. Requires Terraform or OpenTofu 1.11+.
 ## Usage
 
 The target needs rootless Podman with Quadlet and a running systemd user manager.
+Quadlet drop-ins and `.pod` files require Podman 5.0+.
 This example runs as the local Linux user:
 
 ```hcl
 terraform {
   required_providers {
     quadlet = {
-      source = "savely-krasovsky/homelab-helpers"
+      source = "savely-krasovsky/quadlet"
     }
   }
 }
@@ -62,7 +63,7 @@ fresh Terraform state. Import recovers resources recorded by this provider.
 
 ## Development
 
-Requires Go 1.27, Make and golangci-lint 2.13.2. Install Podman for Quadlet tests
+Requires Go 1.27, Make and golangci-lint 2.13.2. Install Podman 5.0+ for Quadlet tests
 and Terraform for acceptance tests and documentation generation.
 
 ```sh

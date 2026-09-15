@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/host"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/host"
 )
 
 var _ host.Session = (*Client)(nil)

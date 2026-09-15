@@ -12,7 +12,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/local"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/local"
 )
 
 func TestPreparePreservesExistingConfigPermissions(t *testing.T) {

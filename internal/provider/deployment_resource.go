@@ -17,7 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/deployment"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/deployment"
 )
 
 var (

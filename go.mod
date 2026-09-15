@@ -1,4 +1,4 @@
-module github.com/savely-krasovsky/terraform-provider-homelab-helpers
+module github.com/savely-krasovsky/terraform-provider-quadlet
 
 go 1.27.0
 

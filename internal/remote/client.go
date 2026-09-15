@@ -20,7 +20,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/host"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/host"
 )
 
 type Config struct {

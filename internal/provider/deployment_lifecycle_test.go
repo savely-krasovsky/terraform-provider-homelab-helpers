@@ -18,9 +18,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/stretchr/testify/require"
 
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/deployment"
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/host"
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/quadlet"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/deployment"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/host"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/quadlet"
 )
 
 // A file-only deployment exercises the full Framework RPC lifecycle without

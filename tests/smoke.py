@@ -43,7 +43,7 @@ def main():
     env = dict(os.environ, TF_IN_AUTOMATION="1", CHECKPOINT_DISABLE="1")
     cli_config = work / "terraform.rc"
     cli_config.write_text("provider_installation {\n  dev_overrides {\n"
-                          f'    "savely-krasovsky/homelab-helpers" = {json.dumps(str(args.provider_dir.resolve()))}\n'
+                          f'    "savely-krasovsky/quadlet" = {json.dumps(str(args.provider_dir.resolve()))}\n'
                           "  }\n  direct {}\n}\n")
     env["TF_CLI_CONFIG_FILE"] = str(cli_config)
     report = {"checks": []}

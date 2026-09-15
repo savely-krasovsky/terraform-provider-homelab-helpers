@@ -17,9 +17,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	hostio "github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/host"
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/local"
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/quadlet"
+	hostio "github.com/savely-krasovsky/terraform-provider-quadlet/internal/host"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/local"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/quadlet"
 	"runtime"
 )
 

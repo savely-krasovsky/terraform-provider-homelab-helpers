@@ -13,7 +13,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/host"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/host"
 )
 
 func session(t *testing.T) *Client {

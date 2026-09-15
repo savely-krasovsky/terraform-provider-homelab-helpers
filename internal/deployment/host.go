@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"io/fs"
 
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/host"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/host"
 )
 
 type Quadlets interface {

@@ -11,11 +11,11 @@ import (
 	"path"
 	"time"
 
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/deployment"
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/host"
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/podman"
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/quadlet"
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/systemd"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/deployment"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/host"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/podman"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/quadlet"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/systemd"
 )
 
 // access composes feature adapters over one session per resource operation.

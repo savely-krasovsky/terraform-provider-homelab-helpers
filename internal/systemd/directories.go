@@ -9,7 +9,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/host"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/host"
 )
 
 type Directories struct{ Config, State string }

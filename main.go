@@ -10,7 +10,7 @@ import (
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/provider"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/provider"
 )
 
 // version is set by the release build.
@@ -23,7 +23,7 @@ func main() {
 	flag.Parse()
 
 	opts := providerserver.ServeOpts{
-		Address: "registry.terraform.io/savely-krasovsky/homelab-helpers",
+		Address: "registry.terraform.io/savely-krasovsky/quadlet",
 		Debug:   debug,
 	}
 

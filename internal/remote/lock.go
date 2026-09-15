@@ -10,7 +10,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/host"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/host"
 )
 
 // Lock dedicates this connection to one operation under a remote kernel flock.

@@ -19,9 +19,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/host"
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/local"
-	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/remote"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/host"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/local"
+	"github.com/savely-krasovsky/terraform-provider-quadlet/internal/remote"
 )
 
 var _ provider.Provider = (*deploymentProvider)(nil)
