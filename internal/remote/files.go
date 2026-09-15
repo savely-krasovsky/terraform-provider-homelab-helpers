@@ -16,6 +16,11 @@ import (
 // CheckPath refuses symlinks in every existing component. The managed tree must
 // belong to the SSH user; it must not be writable by other users.
 func (c *Client) CheckPath(name string) error {
+	files, err := c.files()
+	if err != nil {
+		return err
+	}
+
 	if !path.IsAbs(name) || path.Clean(name) != name || name == "/" {
 		return fmt.Errorf("expected a clean absolute remote path: %q", name)
 	}
@@ -23,10 +28,12 @@ func (c *Client) CheckPath(name string) error {
 	current := "/"
 	for part := range strings.SplitSeq(strings.TrimPrefix(name, "/"), "/") {
 		current = path.Join(current, part)
-		info, err := c.fs.Lstat(current)
+
+		info, err := files.Lstat(current)
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil
 		}
+
 		if err != nil {
 			return fmt.Errorf("inspect remote path %s: %w", current, err)
 		}
@@ -40,23 +47,34 @@ func (c *Client) CheckPath(name string) error {
 }
 
 func (c *Client) Stat(name string) (fs.FileInfo, error) {
+	files, err := c.files()
+	if err != nil {
+		return nil, err
+	}
+
+	return files.Stat(name)
+}
+
+func (c *Client) ReadFile(name string) ([]byte, error) {
+	files, err := c.files()
+	if err != nil {
+		return nil, err
+	}
+
 	if err := c.CheckPath(name); err != nil {
 		return nil, err
 	}
 
-	return c.fs.Lstat(name)
-}
-
-func (c *Client) ReadFile(name string) ([]byte, error) {
 	info, err := c.Stat(name)
 	if err != nil {
 		return nil, err
 	}
+
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("not a regular remote file: %s", name)
 	}
 
-	file, err := c.fs.Open(name)
+	file, err := files.Open(name)
 	if err != nil {
 		return nil, err
 	}
@@ -65,32 +83,67 @@ func (c *Client) ReadFile(name string) ([]byte, error) {
 	return io.ReadAll(file)
 }
 
+// ReadDir lists the entry names of a directory.
+func (c *Client) ReadDir(name string) ([]string, error) {
+	files, err := c.files()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := c.CheckPath(name); err != nil {
+		return nil, err
+	}
+
+	entries, err := files.ReadDir(name)
+	if err != nil {
+		return nil, err
+	}
+
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+
+	return names, nil
+}
+
 func (c *Client) Mkdir(name string, mode fs.FileMode) error {
+	files, err := c.files()
+	if err != nil {
+		return err
+	}
+
 	if err := c.CheckPath(name); err != nil {
 		return err
 	}
 
-	if err := c.fs.MkdirAll(name); err != nil {
+	if err := files.MkdirAll(name); err != nil {
 		return err
 	}
 
-	return c.fs.Chmod(name, mode)
+	return files.Chmod(name, mode)
 }
 
 // Upload creates a staging file. It must not replace a live configuration file.
 func (c *Client) Upload(name string, data []byte, mode fs.FileMode) error {
+	files, err := c.files()
+	if err != nil {
+		return err
+	}
+
 	if err := c.CheckPath(name); err != nil {
 		return err
 	}
 
-	if err := c.fs.MkdirAll(path.Dir(name)); err != nil {
+	if err := files.MkdirAll(path.Dir(name)); err != nil {
 		return err
 	}
 
-	file, err := c.fs.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL)
+	file, err := files.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL)
 	if err != nil {
 		return err
 	}
+
 	if err := file.Chmod(mode); err != nil {
 		_ = file.Close()
 
@@ -99,15 +152,21 @@ func (c *Client) Upload(name string, data []byte, mode fs.FileMode) error {
 
 	_, writeErr := file.Write(data)
 	closeErr := file.Close()
+
 	return errors.Join(writeErr, closeErr)
 }
 
 func (c *Client) Remove(name string) error {
+	files, err := c.files()
+	if err != nil {
+		return err
+	}
+
 	if err := c.CheckPath(name); err != nil {
 		return err
 	}
 
-	err := c.fs.Remove(name)
+	err = files.Remove(name)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
@@ -116,7 +175,12 @@ func (c *Client) Remove(name string) error {
 }
 
 func (c *Client) RemoveStage(name string) error {
-	if !strings.HasPrefix(path.Base(name), ".homelab-stage-") {
+	files, err := c.files()
+	if err != nil {
+		return err
+	}
+
+	if !strings.HasPrefix(path.Base(name), ".terraform-stage-") {
 		return errors.New("refusing to remove a non-staging directory")
 	}
 
@@ -124,5 +188,5 @@ func (c *Client) RemoveStage(name string) error {
 		return err
 	}
 
-	return c.fs.RemoveAll(name)
+	return files.RemoveAll(name)
 }

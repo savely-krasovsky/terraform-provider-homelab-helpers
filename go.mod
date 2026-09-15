@@ -3,10 +3,12 @@ module github.com/savely-krasovsky/terraform-provider-homelab-helpers
 go 1.27.0
 
 require (
-	github.com/bmatcuk/doublestar/v4 v4.10.0
+	al.essio.dev/pkg/shellescape v1.6.1
+	github.com/coreos/go-systemd/v22 v22.7.0
 	github.com/gliderlabs/ssh v0.3.8
+	github.com/godbus/dbus/v5 v5.2.2
+	github.com/gofrs/flock v0.13.1
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
-	github.com/hashicorp/terraform-plugin-framework-validators v0.19.0
 	github.com/hashicorp/terraform-plugin-go v0.31.0
 	github.com/hashicorp/terraform-plugin-testing v1.16.0
 	github.com/pkg/sftp v1.13.11
@@ -46,7 +48,6 @@ require (
 	github.com/hashicorp/terraform-svchost v0.2.1 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
 	github.com/kr/fs v0.1.0 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
@@ -55,7 +56,6 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/oklog/run v1.2.0 // indirect
-	github.com/rogpeppe/go-internal v1.16.0 // indirect
 	github.com/vmihailenco/msgpack v4.0.4+incompatible // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect

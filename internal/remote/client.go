@@ -1,6 +1,7 @@
 // Copyright Savely Krasovsky 2026
 // SPDX-License-Identifier: MPL-2.0
 
+// Package remote is the SSH side of a host: commands, SFTP and socket forwarding.
 package remote
 
 import (
@@ -11,12 +12,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/sftp"
 	"github.com/skeema/knownhosts"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
+
+	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/host"
 )
 
 type Config struct {
@@ -29,9 +33,10 @@ type Config struct {
 }
 
 type Client struct {
-	ssh  *ssh.Client
-	fs   *sftp.Client
-	stop func() bool
+	ssh       *ssh.Client
+	fs        *sftp.Client
+	filesMu   sync.Mutex
+	closeOnce sync.Once
 }
 
 func expandHome(name string) (string, error) {
@@ -47,11 +52,14 @@ func expandHome(name string) (string, error) {
 	if name == "~" {
 		return home, nil
 	}
+
 	return filepath.Join(home, strings.TrimPrefix(name, "~/")), nil
 }
 
+// Connect opens a connection that outlives ctx, which only bounds the handshake.
 func Connect(ctx context.Context, config Config) (*Client, error) {
 	address := net.JoinHostPort(config.Host, fmt.Sprint(config.Port))
+
 	verify, algorithms, err := hostVerifier(config, address)
 	if err != nil {
 		return nil, err
@@ -91,32 +99,54 @@ func Connect(ctx context.Context, config Config) (*Client, error) {
 	}
 
 	_ = conn.SetDeadline(time.Now().Add(20 * time.Second))
+
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
+
 	connection, channels, requests, err := ssh.NewClientConn(conn, address, sshConfig)
 	if err != nil {
-		stop()
-
 		return nil, fmt.Errorf("SSH handshake: %w", err)
 	}
 
 	_ = conn.SetDeadline(time.Time{})
 	sshClient := ssh.NewClient(connection, channels, requests)
 
-	files, err := sftp.NewClient(sshClient)
-	if err != nil {
-		stop()
-		_ = sshClient.Close()
+	return &Client{ssh: sshClient}, nil
+}
 
-		return nil, fmt.Errorf("open SFTP: %w", err)
+var _ host.Session = (*Client)(nil)
+
+func (c *Client) files() (*sftp.Client, error) {
+	c.filesMu.Lock()
+	defer c.filesMu.Unlock()
+
+	if c.fs == nil {
+		files, err := sftp.NewClient(c.ssh)
+		if err != nil {
+			return nil, fmt.Errorf("open SFTP: %w", err)
+		}
+
+		c.fs = files
 	}
 
-	return &Client{ssh: sshClient, fs: files, stop: stop}, nil
+	return c.fs, nil
 }
 
 func (c *Client) Close() {
-	c.stop()
-	_ = c.fs.Close()
-	_ = c.ssh.Close()
+	c.closeOnce.Do(func() {
+		_ = c.ssh.Close()
+		c.filesMu.Lock()
+		defer c.filesMu.Unlock()
+
+		if c.fs != nil {
+			_ = c.fs.Close()
+		}
+	})
+}
+
+// DialContext forwards a TCP connection or Unix socket with a bounded dial.
+func (c *Client) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return c.ssh.DialContext(ctx, network, address)
 }
 
 func hostVerifier(config Config, address string) (ssh.HostKeyCallback, []string, error) {

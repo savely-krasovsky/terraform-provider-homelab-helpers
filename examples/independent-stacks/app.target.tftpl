@@ -1,0 +1,7 @@
+[Unit]
+Description=Example ${name} stack
+Requires=example-${name}.service
+After=example-${name}.service
+
+[Install]
+WantedBy=default.target

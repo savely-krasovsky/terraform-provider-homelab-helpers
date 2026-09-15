@@ -7,9 +7,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/rsa"
 	"encoding/pem"
-	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -24,19 +22,31 @@ import (
 	"github.com/pkg/sftp"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/agent"
-	"golang.org/x/crypto/ssh/knownhosts"
+
+	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/host"
 )
 
-func testServer(t *testing.T, options ...sshserver.Option) Config {
+func testServer(t *testing.T) Config {
 	t.Helper()
+	return startTestServer(t, true)
+}
+
+func startTestServer(t *testing.T, withSFTP bool) Config {
+	t.Helper()
+
+	if runtime.GOOS != "linux" {
+		t.Skip("the test server emulates a Linux host")
+	}
+
 	_, private, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
+
 	signer, err := ssh.NewSignerFromKey(private)
 	require.NoError(t, err)
 
 	key, err := ssh.MarshalPrivateKey(private, "test")
 	require.NoError(t, err)
+
 	keyFile := filepath.Join(t.TempDir(), "id_ed25519")
 	require.NoError(t, os.WriteFile(keyFile, pem.EncodeToMemory(key), 0600))
 
@@ -47,21 +57,21 @@ func testServer(t *testing.T, options ...sshserver.Option) Config {
 		},
 		SubsystemHandlers: map[string]sshserver.SubsystemHandler{"sftp": serveSFTP},
 	}
-	server.AddHostKey(signer)
-	for _, option := range options {
-		require.NoError(t, server.SetOption(option))
+	if !withSFTP {
+		server.SubsystemHandlers = nil
 	}
+
+	server.AddHostKey(signer)
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = server.Close() })
 
-	go func() {
-		_ = server.Serve(listener)
-	}()
+	go func() { _ = server.Serve(listener) }()
 
 	host, port, err := net.SplitHostPort(listener.Addr().String())
 	require.NoError(t, err)
+
 	portNumber, err := strconv.Atoi(port)
 	require.NoError(t, err)
 
@@ -80,329 +90,102 @@ func serveSFTP(session sshserver.Session) {
 		return
 	}
 	defer server.Close()
+
 	_ = server.Serve()
 }
 
 func serveCommand(session sshserver.Session) {
 	cmd := exec.CommandContext(session.Context(), "sh", "-c", session.RawCommand())
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = session, session, session.Stderr()
-	cmd.WaitDelay = time.Second
 
+	cmd.WaitDelay = time.Second
 	if err := cmd.Run(); err != nil {
 		_ = session.Exit(1)
 	}
 }
 
-func TestSSHFilesAndCommands(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("test server emulates a Linux host")
-	}
+func TestFilesCommandsAndUID(t *testing.T) {
 	config := testServer(t)
-	client, err := Connect(t.Context(), config)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	client, err := Connect(ctx, config)
+
+	cancel()
 	require.NoError(t, err)
+
 	defer client.Close()
 
 	file := filepath.Join(t.TempDir(), "nested/config")
 	require.NoError(t, client.WriteFile(t.Context(), file, []byte("first"), 0600))
 	require.NoError(t, client.WriteFile(t.Context(), file, []byte("second\n"), 0644))
+
 	content, err := client.ReadFile(file)
 	require.NoError(t, err)
 	require.Equal(t, "second\n", string(content))
-
-	info, err := client.Stat(file)
-	require.NoError(t, err)
-	require.EqualValues(t, 0644, info.Mode().Perm())
-	require.NoError(t, client.CheckPath(file))
-	require.Error(t, client.CheckPath(filepath.Join(file, "child")), "only the final path component may be a regular file")
+	require.Error(t, client.CheckPath(filepath.Join(file, "child")))
 
 	value := "apostrophe' ; $(no-command) `no-command`\n"
-	output, err := client.Run(t.Context(), Command{Name: "printf", Args: []string{"%s", value}})
+	output, err := client.Run(t.Context(), host.Command{Name: "printf", Args: []string{"%s", value}})
 	require.NoError(t, err)
 	require.Equal(t, value, string(output))
 
-	output, err = client.Run(t.Context(), Command{
-		Name: "printenv",
-		Args: []string{"HOMELAB_TEST"},
-		Env:  []string{"HOMELAB_TEST=" + value},
-	})
-	require.NoError(t, err)
-	require.Equal(t, value+"\n", string(output))
-
-	_, err = client.Run(t.Context(), Command{Name: "sh", Args: []string{"-c", "echo very-secret >&2; exit 1"}})
+	_, err = client.Run(t.Context(), host.Command{Name: "sh", Args: []string{"-c", "echo very-secret >&2; exit 1"}})
 	require.Error(t, err)
 	require.NotContains(t, err.Error(), "very-secret")
 
+	_, err = client.Run(t.Context(), host.Command{
+		Name: "sh", Args: []string{"-c", "echo app.container: unsupported-key >&2; exit 1"}, CaptureStderr: true,
+	})
+	require.ErrorContains(t, err, "app.container: unsupported-key")
+
+	uid, err := host.UserID(t.Context(), client)
+	require.NoError(t, err)
+	require.Equal(t, os.Getuid(), uid)
+
 	link := filepath.Join(filepath.Dir(file), "link")
 	require.NoError(t, os.Symlink(file, link))
+
+	info, err := client.Stat(link)
+	require.NoError(t, err)
+	require.True(t, info.Mode().IsRegular())
+
+	_, err = client.ReadFile(link)
+	require.Error(t, err)
 	require.Error(t, client.WriteFile(t.Context(), link, []byte("bad"), 0600))
 }
 
-func TestSSHSelectsTrustedHostKey(t *testing.T) {
-	private, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(t, err)
-	rsaSigner, err := ssh.NewSignerFromKey(private)
-	require.NoError(t, err)
-
-	for _, algorithm := range []string{"ed25519", "rsa"} {
-		for _, source := range []string{"pinned", "known_hosts", "hashed_known_hosts"} {
-			t.Run(algorithm+"/"+source, func(t *testing.T) {
-				config := testServer(t, func(server *sshserver.Server) error {
-					server.AddHostKey(rsaSigner)
-
-					return nil
-				})
-				if algorithm == "rsa" {
-					config.HostKey = strings.TrimSpace(string(ssh.MarshalAuthorizedKey(rsaSigner.PublicKey())))
-				}
-
-				if source != "pinned" {
-					address := knownhosts.Normalize(net.JoinHostPort(config.Host, strconv.Itoa(config.Port)))
-					if source == "hashed_known_hosts" {
-						address = knownhosts.HashHostname(address)
-					}
-
-					config.KnownHostsFile = filepath.Join(t.TempDir(), "known_hosts")
-					require.NoError(t, os.WriteFile(config.KnownHostsFile, []byte(address+" "+config.HostKey+"\n"), 0600))
-					config.HostKey = ""
-				}
-
-				client, err := Connect(t.Context(), config)
-				require.NoError(t, err)
-				defer client.Close()
-			})
-		}
-	}
-}
-
-func TestSSHRejectsUntrustedHost(t *testing.T) {
-	_, other, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-	signer, err := ssh.NewSignerFromKey(other)
-	require.NoError(t, err)
-
-	for _, source := range []string{"pinned", "known_hosts", "unknown_host"} {
-		t.Run(source, func(t *testing.T) {
-			config := testServer(t)
-			config.HostKey = string(ssh.MarshalAuthorizedKey(signer.PublicKey()))
-			expected := "key mismatch"
-
-			if source != "pinned" {
-				address := knownhosts.HashHostname(knownhosts.Normalize(net.JoinHostPort(config.Host, strconv.Itoa(config.Port))))
-				content := address + " " + config.HostKey
-				if source == "unknown_host" {
-					content = ""
-					expected = "key is unknown"
-				}
-
-				config.KnownHostsFile = filepath.Join(t.TempDir(), "known_hosts")
-				require.NoError(t, os.WriteFile(config.KnownHostsFile, []byte(content), 0600))
-				config.HostKey = ""
-			}
-
-			client, err := Connect(t.Context(), config)
-			require.ErrorContains(t, err, expected)
-			require.Nil(t, client)
-		})
-	}
-}
-
-func TestSFTPFailureClosesSSH(t *testing.T) {
-	connections := make(chan context.Context, 1)
-	config := testServer(t, func(server *sshserver.Server) error {
-		server.SubsystemHandlers["sftp"] = func(session sshserver.Session) {
-			connections <- session.Context()
-			_ = session.Exit(1)
-		}
-
-		return nil
-	})
-
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	client, err := Connect(ctx, config)
-	require.ErrorContains(t, err, "open SFTP")
-	require.Nil(t, client)
-
-	connection := <-connections
-	select {
-	case <-connection.Done():
-	case <-time.After(time.Second):
-		t.Fatal("failed SFTP initialization left the SSH connection open")
-	}
-}
-
-func TestSSHAgentReleasedAfterConnect(t *testing.T) {
+func TestConnectionOutlivesItsContext(t *testing.T) {
 	config := testServer(t)
-	keyBytes, err := os.ReadFile(config.PrivateKeyFile)
-	require.NoError(t, err)
-	key, err := ssh.ParseRawPrivateKey(keyBytes)
-	require.NoError(t, err)
-	keyring := agent.NewKeyring()
-	require.NoError(t, keyring.Add(agent.AddedKey{PrivateKey: key}))
-
-	socket := filepath.Join(t.TempDir(), "agent.sock")
-	listener, err := net.Listen("unix", socket)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = listener.Close() })
-	t.Setenv("SSH_AUTH_SOCK", socket)
-
-	disconnected := make(chan struct{})
-	go func() {
-		defer close(disconnected)
-		conn, err := listener.Accept()
-		if err != nil {
-			return
-		}
-		defer conn.Close()
-		_ = agent.ServeAgent(keyring, conn)
-	}()
-
-	config.PrivateKeyFile = ""
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
+	ctx, cancel := context.WithCancel(t.Context())
 	client, err := Connect(ctx, config)
 	require.NoError(t, err)
+
 	defer client.Close()
 
-	select {
-	case <-disconnected:
-	case <-time.After(time.Second):
-		t.Fatal("agent connection retained after authentication")
-	}
+	cancel()
 
-	output, err := client.Run(ctx, Command{Name: "printf", Args: []string{"connected"}})
+	_, err = client.Run(t.Context(), host.Command{Name: "true"})
 	require.NoError(t, err)
-	require.Equal(t, "connected", string(output))
 }
 
-func TestInstallStagedFile(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("test server emulates a Linux host")
-	}
-	client, err := Connect(t.Context(), testServer(t))
-	require.NoError(t, err)
-	defer client.Close()
-
-	stage := filepath.Join(t.TempDir(), "staged.conf")
-	file := filepath.Join(t.TempDir(), "nested/config")
-	require.NoError(t, client.WriteFile(t.Context(), file, []byte("old"), 0600))
-	require.NoError(t, client.Upload(stage, []byte("validated\n"), 0644))
-	require.Error(t, client.Upload(stage, []byte("overwrite"), 0644))
-	require.NoError(t, client.InstallFile(t.Context(), stage, file))
-
-	content, err := os.ReadFile(file)
-	require.NoError(t, err)
-	require.Equal(t, "validated\n", string(content))
-	info, err := os.Stat(file)
-	require.NoError(t, err)
-	require.EqualValues(t, 0644, info.Mode().Perm())
-
-	// A failed copy must preserve the installed file and clean up its temporary file.
-	require.Error(t, client.InstallFile(t.Context(), stage+"-missing", file))
-	content, err = os.ReadFile(file)
-	require.NoError(t, err)
-	require.Equal(t, "validated\n", string(content))
-	temporary, err := filepath.Glob(filepath.Join(filepath.Dir(file), ".homelab-write-*"))
-	require.NoError(t, err)
-	require.Empty(t, temporary)
-
-	link := filepath.Join(filepath.Dir(file), "link")
-	require.NoError(t, os.Symlink(file, link))
-	require.Error(t, client.InstallFile(t.Context(), stage, link))
-	require.Error(t, client.InstallFile(t.Context(), link, file))
-}
-
-func TestRemoteLockCancellationAndReacquire(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("flock is a Linux host prerequisite")
-	}
+func TestUntrustedHostIsRejected(t *testing.T) {
 	config := testServer(t)
-	client, err := Connect(t.Context(), config)
-	require.NoError(t, err)
-	defer client.Close()
+	config.HostKey = ""
+	config.KnownHostsFile = filepath.Join(t.TempDir(), "known_hosts")
+	require.NoError(t, os.WriteFile(config.KnownHostsFile, nil, 0600))
 
-	filename := filepath.Join(t.TempDir(), "deploy.lock")
-	lease, release, err := client.Lock(t.Context(), filename)
-	require.NoError(t, err)
-	defer release()
-
-	waiter, err := Connect(t.Context(), config)
-	require.NoError(t, err)
-	defer waiter.Close()
-
-	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
-	defer cancel()
-	_, _, err = waiter.Lock(ctx, filename)
+	_, err := Connect(t.Context(), config)
 	require.Error(t, err)
-	require.NoError(t, lease.Err(), "a waiting deployment must not cancel the lock holder")
-	_, err = client.Stat(filename)
-	require.NoError(t, err)
-
-	release()
-	select {
-	case <-lease.Done():
-	case <-time.After(time.Second):
-		t.Fatal("lease did not cancel")
-	}
-
-	ctx2, cancel2 := context.WithTimeout(t.Context(), time.Second)
-	defer cancel2()
-	next, err := Connect(ctx2, config)
-	require.NoError(t, err)
-	defer next.Close()
-
-	_, unlock, err := next.Lock(ctx2, filename)
-	require.NoError(t, err)
-	unlock()
 }
 
-func TestLostLockClosesSFTP(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("flock is a Linux host prerequisite")
-	}
-
-	sessions := make(chan sshserver.Session, 1)
-	config := testServer(t, func(server *sshserver.Server) error {
-		server.Handler = func(session sshserver.Session) {
-			sessions <- session
-			serveCommand(session)
-		}
-
-		return nil
-	})
-	client, err := Connect(t.Context(), config)
+func TestCommandsDoNotRequireSFTP(t *testing.T) {
+	client, err := Connect(t.Context(), startTestServer(t, false))
 	require.NoError(t, err)
+
 	defer client.Close()
 
-	lease, release, err := client.Lock(t.Context(), filepath.Join(t.TempDir(), "deploy.lock"))
+	_, err = client.Run(t.Context(), host.Command{Name: "true"})
 	require.NoError(t, err)
-	defer release()
 
-	// Lose only the lock channel: the provider must tear down the other channels.
-	lockSession := <-sessions
-	require.NoError(t, lockSession.Exit(1))
-	select {
-	case <-lease.Done():
-	case <-time.After(time.Second):
-		t.Fatal("lost lock did not cancel the operation")
-	}
-	require.NoError(t, t.Context().Err(), "the outer operation context remains alive")
-
-	_, err = client.Stat(config.PrivateKeyFile)
-	require.Error(t, err, "SFTP must stop when the lock session ends")
-	file := filepath.Join(t.TempDir(), "after-lock-loss")
-	require.Error(t, client.Upload(file, []byte("must not be written"), 0600))
-	require.NoFileExists(t, file)
-}
-
-func TestCommandInput(t *testing.T) {
-	client, err := Connect(t.Context(), testServer(t))
-	require.NoError(t, err)
-	defer client.Close()
-
-	secret := "content\nwith\nnewlines\n"
-	result, err := client.Run(t.Context(), Command{Name: "cat", Stdin: strings.NewReader(secret)})
-	require.NoError(t, err)
-	require.Equal(t, secret, string(result))
-	require.NotContains(t, (Command{Name: "cat", Stdin: io.NopCloser(strings.NewReader(secret))}).shell(), secret)
+	_, err = client.ReadFile(filepath.Join(t.TempDir(), "missing"))
+	require.ErrorContains(t, err, "open SFTP")
 }

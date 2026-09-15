@@ -18,6 +18,7 @@ linters:
     - unparam
     - unused
     - usetesting
+    - wsl_v5
   exclusions:
     generated: lax
     presets:
@@ -30,6 +31,15 @@ linters:
       - builtin$
       - examples$
   settings:
+    wsl_v5:
+      # Keep a statement and its immediate use/error check together.
+      allow-first-in-block: true
+      allow-whole-block: false
+      branch-max-lines: 2
+      case-max-lines: 5
+      enable:
+        - after-block
+        - assign-expr
     depguard:
       rules:
         main:

@@ -4,115 +4,112 @@
 package deployment
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"maps"
+	"path"
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/systemd"
 )
 
-type Group struct {
-	Units       []string `json:"units"`
-	Enable      []string `json:"enable"`
-	Hash        string   `json:"hash"`
-	UsesSecrets bool     `json:"uses_secrets"`
-}
+const (
+	nativeDir  = "systemd/user/"
+	quadletDir = "containers/systemd/"
+)
 
+// Payload has one activation boundary: every file and trigger belongs to the
+// deployment as a whole.
 type Payload struct {
-	Secrets         map[string]string `json:"secrets"`
-	Files           map[string]string `json:"files"`
-	Units           []string          `json:"units"`
-	Groups          map[string]Group  `json:"groups"`
-	Firewall        string            `json:"firewall"`
-	SecretsRevision string            `json:"secrets_revision"`
-	DataRoot        string            `json:"data_root,omitempty"`
-}
-
-// Ownership keeps the Bash manifest/journal format so existing hosts can migrate in place.
-type Ownership struct {
-	Files []string `json:"files"`
-	Units []string `json:"units"`
-}
-
-type manifest struct {
-	Revision   string            `json:"revision,omitempty"`
-	FileHashes map[string]string `json:"file_hashes,omitempty"`
-	Ownership
-	Groups          map[string]Group `json:"groups"`
-	SecretsRevision string           `json:"secrets_revision"`
+	Files      map[string]string `json:"files"`
+	Restart    []string          `json:"restart,omitempty"`
+	TryRestart []string          `json:"try_restart,omitempty"`
+	Enable     []string          `json:"enable,omitempty"`
+	Triggers   map[string]string `json:"triggers,omitempty"`
 }
 
 var (
 	managedPath = regexp.MustCompile(`^[a-zA-Z0-9_./-]+$`)
-	managedUnit = regexp.MustCompile(`^[a-zA-Z0-9_][a-zA-Z0-9_.@-]*\.(service|timer|socket)$`)
-	secretName  = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
 )
 
-func (o Ownership) validate() error {
-	for _, name := range o.Files {
-		if !managedPath.MatchString(name) ||
-			!fs.ValidPath(name) ||
-			name == "." {
-			return fmt.Errorf("invalid managed path: %q", name)
-		}
-	}
-
-	for _, unit := range o.Units {
-		if !managedUnit.MatchString(unit) {
-			return fmt.Errorf("invalid managed unit: %q", unit)
-		}
+func ValidatePath(name string) error {
+	if !managedPath.MatchString(name) || !fs.ValidPath(name) || name == "." {
+		return fmt.Errorf("invalid managed path: %q", name)
 	}
 
 	return nil
 }
 
+func Digest(value any) string {
+	data, _ := json.Marshal(value) // Callers use only JSON-serializable descriptions.
+	sum := sha256.Sum256(data)
+
+	return hex.EncodeToString(sum[:])
+}
+
 func (p Payload) Validate() error {
-	names := map[string]bool{}
-	for name, id := range p.Secrets {
-		normalized := strings.ReplaceAll(name, "_", "-")
-		if !secretName.MatchString(name) || strings.TrimSpace(id) == "" || id == "-" || names[normalized] {
-			return fmt.Errorf("invalid or conflicting secret reference %q", name)
+	for _, file := range slices.Sorted(maps.Keys(p.Files)) {
+		if err := ValidatePath(file); err != nil {
+			return err
 		}
 
-		names[normalized] = true
-	}
-
-	if p.Firewall == "" {
-		return fmt.Errorf("firewall must not be empty")
-	}
-
-	owned := Ownership{Files: slices.Collect(maps.Keys(p.Files)), Units: p.Units}
-	if err := owned.validate(); err != nil {
-		return err
-	}
-
-	for name, group := range p.Groups {
-		if group.Hash == "" || len(group.Units) == 0 {
-			return fmt.Errorf("invalid restart group %q", name)
+		for parent := path.Dir(file); parent != "."; parent = path.Dir(parent) {
+			if _, exists := p.Files[parent]; exists {
+				return fmt.Errorf("managed paths conflict: %s and %s", parent, file)
+			}
 		}
 
-		for _, unit := range slices.Concat(group.Units, group.Enable) {
-			if !slices.Contains(p.Units, unit) {
-				return fmt.Errorf("group %q refers to unmanaged unit %q", name, unit)
+		if path.Dir(file) == strings.TrimSuffix(nativeDir, "/") {
+			if err := systemd.ValidateUnit(path.Base(file)); err != nil {
+				return err
 			}
 		}
 	}
 
-	return p.validateData()
-}
+	for _, list := range []struct {
+		name  string
+		units []string
+	}{{"restart", p.Restart}, {"try_restart", p.TryRestart}, {"enable", p.Enable}} {
+		seen := map[string]bool{}
 
-func (p Payload) validateData() error {
-	if p.DataRoot != "" && (!hostPath(p.DataRoot) || p.DataRoot == "/") {
-		return fmt.Errorf("expected a clean absolute data root: %q", p.DataRoot)
+		for _, unit := range list.units {
+			if err := systemd.ValidateUnit(unit); err != nil {
+				return err
+			}
+
+			if seen[unit] {
+				return fmt.Errorf("unit %q appears more than once in %s", unit, list.name)
+			}
+
+			seen[unit] = true
+			if list.name == "enable" {
+				if _, native := p.Files[nativeDir+unit]; !native {
+					return fmt.Errorf("enable requires a native file at %s%s; Quadlet enablement belongs in [Install]", nativeDir, unit)
+				}
+			}
+		}
+	}
+
+	for _, unit := range p.Restart {
+		if slices.Contains(p.TryRestart, unit) {
+			return fmt.Errorf("unit %q appears in both restart and try_restart", unit)
+		}
 	}
 
 	return nil
 }
 
-func unique(values ...[]string) []string {
-	all := slices.Concat(values...)
-	slices.Sort(all)
+func (p Payload) ValidateOwnership(units []string) error {
+	for _, unit := range slices.Concat(p.Restart, p.TryRestart, p.Enable) {
+		if !slices.Contains(units, unit) {
+			return fmt.Errorf("activation refers to unowned unit %q: no native file or generated unit", unit)
+		}
+	}
 
-	return slices.Compact(all)
+	return nil
 }

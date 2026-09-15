@@ -1,15 +1,13 @@
 # Examples
 
-These examples also supply code snippets for generated provider documentation:
+Snippets for the generated documentation: `provider/provider.tf` configures the
+provider and `resources/<type>/resource.tf` shows each resource. They are
+documentation, not fixtures to apply. Run `make generate` after changing them.
 
-- `provider/provider.tf` configures the provider.
-- `functions/<name>/function.tf` demonstrates each provider function.
-- `resources/homelab_config/resource.tf` shows the deployment resource.
+[`independent-stacks`](independent-stacks) is a runnable local example: two
+applications with native targets and separate activation share one network.
+Its README explains creation, updating one stack and deleting it independently.
 
-Run `make generate` from the repository root after changing examples or schema
-Markdown descriptions. It formats HCL and invokes the pinned `tfplugindocs`
-tool through `tools/tools.go`, following the scaffolding layout.
-
-The deployment example requires a configured FCOS host. It is documentation,
-not a fixture to apply during local testing. There is no import script: a
-resource ID alone cannot recover the connection settings and desired files.
+The provider example includes SSH and a local alias. Local mode requires Linux;
+resources using that alias set `provider = quadlet.local`. Socket overrides are
+paths on the selected target, not additional transports.

@@ -3,7 +3,7 @@ schema_version = 1
 project {
   license          = "MPL-2.0"
   copyright_holder = "Savely Krasovsky"
-  copyright_year   = 2025
+  copyright_year   = 2026
   ignore_year1     = true
 
   header_ignore = [
@@ -14,10 +14,6 @@ project {
     "tools/tools.go",
     "internal/provider/provider.go",
     "internal/provider/provider_test.go",
-    "internal/provider/dirhash_function.go",
-    "internal/provider/dirhash_function_test.go",
-    "internal/provider/dirset_function.go",
-    "internal/provider/dirset_function_test.go",
 
     # local IDE state and generated build output
     ".idea/**",

@@ -10,30 +10,14 @@ import (
 	"io"
 	"slices"
 	"strings"
+
+	"al.essio.dev/pkg/shellescape"
+
+	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/host"
 )
 
-type Command struct {
-	Name  string
-	Args  []string
-	Env   []string
-	Stdin io.Reader
-}
-
-// shell quotes every argument for POSIX shells. Secret values travel through stdin or SFTP.
-func (c Command) shell() string {
-	args := slices.Concat([]string{c.Name}, c.Args)
-	if len(c.Env) > 0 {
-		args = slices.Concat([]string{"env"}, c.Env, args)
-	}
-
-	for i := range args {
-		args[i] = "'" + strings.ReplaceAll(args[i], "'", "'\"'\"'") + "'"
-	}
-
-	return strings.Join(args, " ")
-}
-
-func (c *Client) Run(ctx context.Context, command Command) ([]byte, error) {
+// Run executes the command through the remote login shell; secret values travel through stdin or SFTP.
+func (c *Client) Run(ctx context.Context, command host.Command) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -45,20 +29,39 @@ func (c *Client) Run(ctx context.Context, command Command) ([]byte, error) {
 	defer session.Close()
 
 	var stdout bytes.Buffer
+
 	session.Stdout = &stdout
 	session.Stderr = io.Discard
 	session.Stdin = command.Stdin
 
+	var stderr host.Stderr
+	if command.CaptureStderr {
+		session.Stderr = &stderr
+	}
+
 	stop := context.AfterFunc(ctx, func() { _ = session.Close() })
 	defer stop()
 
-	if err := session.Run(command.shell()); err != nil {
+	if err := session.Run(shell(command)); err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
 
-		return nil, fmt.Errorf("remote %s failed: %w", command.Name, err)
+		return nil, stderr.Wrap(fmt.Errorf("remote %s failed: %w", command.Name, err))
 	}
 
 	return stdout.Bytes(), nil
+}
+
+func shell(command host.Command) string {
+	words := slices.Concat([]string{command.Name}, command.Args)
+	if len(command.Env) > 0 {
+		words = slices.Concat([]string{"env"}, command.Env, words)
+	}
+
+	for i := range words {
+		words[i] = shellescape.Quote(words[i])
+	}
+
+	return strings.Join(words, " ")
 }

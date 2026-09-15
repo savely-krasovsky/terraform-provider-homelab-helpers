@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"sync"
+
+	"github.com/savely-krasovsky/terraform-provider-homelab-helpers/internal/host"
 )
 
 // Lock dedicates this connection to one operation under a remote kernel flock.
@@ -21,6 +23,7 @@ func (c *Client) Lock(ctx context.Context, filename string) (context.Context, fu
 	lease, cancel := context.WithCancel(ctx)
 	closeConnection := sync.OnceFunc(func() {
 		_ = c.ssh.Close()
+
 		cancel()
 	})
 	stop := context.AfterFunc(ctx, closeConnection)
@@ -49,13 +52,14 @@ func (c *Client) Lock(ctx context.Context, filename string) (context.Context, fu
 
 		return nil, nil, err
 	}
+
 	session.Stderr = io.Discard
 
-	command := Command{
+	command := host.Command{
 		Name: "flock",
 		Args: []string{"--exclusive", "--no-fork", filename, "sh", "-c", "printf 'locked\\n'; cat >/dev/null"},
 	}
-	if err := session.Start(command.shell()); err != nil {
+	if err := session.Start(shell(command)); err != nil {
 		release()
 
 		return nil, nil, err
@@ -67,6 +71,7 @@ func (c *Client) Lock(ctx context.Context, filename string) (context.Context, fu
 
 		return nil, nil, fmt.Errorf("acquire remote deployment lock: %w", err)
 	}
+
 	if line != "locked\n" {
 		release()
 
@@ -75,6 +80,7 @@ func (c *Client) Lock(ctx context.Context, filename string) (context.Context, fu
 
 	go func() {
 		_ = session.Wait()
+
 		release()
 	}()
 

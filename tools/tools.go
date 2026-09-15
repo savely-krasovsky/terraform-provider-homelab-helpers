@@ -13,4 +13,4 @@ package tools
 //go:generate terraform fmt -recursive ../examples/
 
 // Generate documentation.
-//go:generate go tool tfplugindocs generate --provider-dir .. -provider-name homelab
+//go:generate go tool tfplugindocs generate --provider-dir .. -provider-name quadlet

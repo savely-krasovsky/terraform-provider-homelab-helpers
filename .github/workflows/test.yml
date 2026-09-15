@@ -28,7 +28,11 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
       - run: go mod download
+      - name: Install the Quadlet generator for integration tests
+        run: sudo apt-get update && sudo apt-get install --yes podman
       - run: make build test vet
+        env:
+          REQUIRE_QUADLET_TESTS: "1"
       - name: Run linters
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
@@ -76,9 +80,7 @@ jobs:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
       - run: go mod download
-      - env:
-          TF_ACC: "1"
-        run: make testacc
+      - run: make testacc
         timeout-minutes: 10
       - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
         if: matrix.terraform == '1.14.*'

@@ -1,0 +1,15 @@
+[Unit]
+Description=Example ${name} application
+Requires=example-network.service
+After=example-network.service
+PartOf=example-${name}.target
+
+[Container]
+Image=docker.io/library/busybox:stable
+ContainerName=example-${name}
+Network=example
+Volume=%E/example-${name}:/srv:ro,Z
+Exec=httpd -f -p 8080 -h /srv
+
+[Service]
+TimeoutStartSec=900
